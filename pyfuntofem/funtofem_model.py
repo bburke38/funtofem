@@ -326,7 +326,7 @@ class FUNtoFEMmodel(object):
                     if scenario.group == scenario2.group and not scenario2.group_root:
                         scenario2.set_coupled_derivatives(scenario)
 
-    def write_sensitivity_file(self, comm, filename, discipline='aero', root=0):
+    def write_sensitivity_file(self, comm, filepath, discipline='aero', root=0):
         """
         Write the sensitivity file.
 
@@ -343,8 +343,8 @@ class FUNtoFEMmodel(object):
         ----------
         comm: MPI communicator
             Global communicator across all FUNtoFEM processors
-        filename: str
-            The name of the file to be generated
+        filepath: str
+            Filename for local file or fullpath of the file
         discipline: str
             The name of the discipline sensitivity data to be written
         root: int
@@ -353,19 +353,32 @@ class FUNtoFEMmodel(object):
 
         funcs = self.get_functions()
 
-        count = 0
+        # get the coordinate derivatives
+        nnodes = 0
         ids = []
         derivs = []
         for body in self.bodies:
             id, deriv = body.collect_coordinate_derivatives(comm, discipline, root=root)
-            count += len(id)
+            nnodes += len(id)
             ids.append(id)
             derivs.append(deriv)
 
-
         if comm.rank == root:
-            # Number of functionals
-            data = '{}\n'.format(len(funcs))
+
+            #count number of variables of each type
+            #vartypes currently set to discipline aero or struct
+            nDVs = 0
+            for body in self.bodies:
+                vartype = discipline
+                if vartype in body.variables: 
+                    DVgroup = body.variables[vartype]
+                    nDVs += len(DVgroup)
+
+            #separate DVset for each DV
+            nDVsets = nDVs
+
+            # Number of functionals, number of DVsets
+            data = '{} {}\n'.format(len(funcs),nDVsets)
 
             for n, func in enumerate(funcs):
                 # Print the function name
@@ -377,18 +390,42 @@ class FUNtoFEMmodel(object):
                 # Print the number of coordinates
                 data += '{}\n'.format(count)
 
+                # Write the coordinate derivatives for this function
                 for ibody in range(len(self.bodies)):
                     id = ids[ibody]
                     deriv = derivs[ibody]
 
+                    # TODO: test if should be id[i]+1 here
                     for i in range(len(id)):
                         data += '{} {} {} {}\n'.format(
-                            int(id[i]),
+                            int(id[i]+1),
                             deriv[3 * i, n],
                             deriv[3 * i + 1, n],
                             deriv[3 * i + 2, n])
 
-            with open(filename, "w") as fp:
+                # Write the funtofem aero,struct DV derivatives
+                for body in self.bodies:
+
+                    # convention: vartype is the discipline aero, struct
+                    vartype = discipline
+
+                    if vartype in body.variables: 
+                        DVgroup = body.variables[vartype]
+                        derivGroup = body.derivatives[vartype]
+
+                        #iterate over each DV in the DVgroup
+                        for ivar in range(len(DVgroup)):
+                            var = DVgroup[ivar]
+                            deriv = derivGroup[ivar].real
+
+                            # write DV set name, nDV_set, derivative
+                            # convention: each DV set is a separate DV
+                            data += var.name + "\n"
+                            data += "1\n"
+                            data += str(deriv) + "\n"
+
+
+            with open(filepath, "w") as fp:
                 fp.write(data)
 
         return

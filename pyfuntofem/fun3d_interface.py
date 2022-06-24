@@ -407,6 +407,7 @@ class Fun3dInterface(SolverInterface):
                                     scenario.derivatives[vartype][offset+func][i] = self.comm.reduce(self.dHdq[func])
                             else:
                                 scenario.derivatives[vartype][offset+func][i] = 0.0
+                            #fix this to not broadcast each component separately
                             scenario.derivatives[vartype][offset+func][i] = self.comm.bcast(scenario.derivatives[vartype][offset+func][i],root=0)
 
 
@@ -511,7 +512,7 @@ class Fun3dInterface(SolverInterface):
                     body.aero_loads[1::3] = self.qinf * fy[:]
                     body.aero_loads[2::3] = self.qinf * fz[:]
 
-                    if (self.comm.Get_rank() == 0): print("Mean aero_loads = {}\n".format(np.mean(body.aero_loads)), flush=True)
+                    #if (self.comm.Get_rank() == 0): print("Mean aero_loads = {}\n".format(np.mean(body.aero_loads)), flush=True)
 
                 if body.thermal_transfer is not None:
                     cqx, cqy, cqz, cq_mag = self.fun3d_flow.extract_heat_flux(body.aero_nnodes,
@@ -522,7 +523,7 @@ class Fun3dInterface(SolverInterface):
                     body.aero_heat_flux[2::3] = self.thermal_scale * cqz[:]
                     body.aero_heat_flux_mag[:] = self.thermal_scale * cq_mag[:]
 
-                    if (self.comm.Get_rank() == 0): print("Mean heat_flux = {}\n".format(np.mean(body.aero_heat_flux_mag)), flush=True)
+                    #if (self.comm.Get_rank() == 0): print("Mean heat_flux = {}\n".format(np.mean(body.aero_heat_flux_mag)), flush=True)
 
         if not scenario.steady:
             # save this steps forces for the adjoint
