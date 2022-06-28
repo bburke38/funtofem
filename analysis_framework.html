@@ -148,13 +148,13 @@ transfer scheme, which transfers displacements, loads, and heat flux.</p>
 <h3>Heat Flux Integration Residual<a class="headerlink" href="#heat-flux-integration-residual" title="Permalink to this heading">¶</a></h3>
 <div class="math notranslate nohighlight">
 \[\mathbf{\color{blue}H}(\mathbf{h}_A, \mathbf{q}, \mathbf{x}, \mathbf{x}_G) \triangleq
-\mathbf{h}_A - \psi (\mathbf{q}, \mathbf{x}, \mathbf{x}_G) = 0\]</div>
+\mathbf{h}_A - \varphi (\mathbf{q}, \mathbf{x}, \mathbf{x}_G) = 0\]</div>
 <ul class="simple">
 <li><p><span class="math notranslate nohighlight">\(\mathbf{h}_A\)</span> - nodal forces on aerodynamic surface</p></li>
 <li><p><span class="math notranslate nohighlight">\(\mathbf{x}\)</span> - design variable vector</p></li>
 <li><p><span class="math notranslate nohighlight">\(\mathbf{x}_G\)</span> - aerodynamic volume mesh</p></li>
 <li><p><span class="math notranslate nohighlight">\(\mathbf{q}\)</span> - flow state vector</p></li>
-<li><p><span class="math notranslate nohighlight">\(\psi\)</span> - action of the heat flux integration</p></li>
+<li><p><span class="math notranslate nohighlight">\(\varphi\)</span> - action of the heat flux integration</p></li>
 </ul>
 </section>
 </section>
@@ -176,11 +176,20 @@ transfer scheme, which transfers displacements, loads, and heat flux.</p>
 <section id="aeroelastic-framework">
 <h2>Aeroelastic Framework<a class="headerlink" href="#aeroelastic-framework" title="Permalink to this heading">¶</a></h2>
 <p>The forward solve path in FUNtoFEM goes through several steps.
-First the surface displacements are computed, taking the displacement
-of structural nodes, <span class="math notranslate nohighlight">\(\mathbf{u}_S\)</span>, as an input and solving for the discplacements of
-aerodynamic surface nodes, <span class="math notranslate nohighlight">\(\mathbf{u}_A\)</span>.
-The grid deformation residual is then computed with the displacement of the aerodynamic surface nodes, <span class="math notranslate nohighlight">\(\mathbf{u}_A\)</span>,
-as an input and solving for <span class="math notranslate nohighlight">\(\mathbf{x}_G\)</span>, the aerodynamic volume mesh.</p>
+First, the surface displacements are computed inside FUNtoFEM, taking the displacement
+of structural nodes, <span class="math notranslate nohighlight">\(\mathbf{u}_S\)</span>, as an input and solving for the displacements of
+aerodynamic surface nodes, <span class="math notranslate nohighlight">\(\mathbf{u}_A\)</span>, in the displacement
+transfer residual, <span class="math notranslate nohighlight">\(\mathbf{\color{green}D}\)</span>.
+The grid deformation residual, <span class="math notranslate nohighlight">\(\mathbf{\color{blue}G}\)</span>, is then
+computed with the displacement of the aerodynamic surface nodes, <span class="math notranslate nohighlight">\(\mathbf{u}_A\)</span>,
+as an input and solving for <span class="math notranslate nohighlight">\(\mathbf{x}_G\)</span>, the aerodynamic volume mesh.
+This is then followed by the flow residual, <span class="math notranslate nohighlight">\(\mathbf{\color{blue}A}\)</span>,
+and the force integration residual, <span class="math notranslate nohighlight">\(\mathbf{\color{blue}F}\)</span>.
+These three residuals are internal to FUN3D.
+The load transfer residual, <span class="math notranslate nohighlight">\(\mathbf{\color{green}L}\)</span>, is then solved inside FUNtoFEM.
+Finally, the structural residual, <span class="math notranslate nohighlight">\(\mathbf{\color{orange}S}\)</span>, is computed in TACS.</p>
+<p>The order of execution in the forward solve follows the list shown below.
+The underlined value is solved for at each step.</p>
 <div class="math notranslate nohighlight">
 \[\begin{split}\begin{align}
 \mathbf{\color{green}D}(\underline{\mathbf{u}_A}, \mathbf{u}_S) &amp;= 0 \\
@@ -203,7 +212,7 @@ as an input and solving for <span class="math notranslate nohighlight">\(\mathbf
 \frac{\partial \mathbf{S}^T}{\partial \mathbf{u}_S}\psi_S + \frac{\partial \mathbf{D}^T}{\partial \mathbf{u}_S}\psi_D +
 \frac{\partial \mathbf{L}^T}{\partial \mathbf{u}_S}\psi_L &amp;= -\frac{\partial \mathbf{f}^T}{\partial \mathbf{u}_S} \\
 \end{align}\end{split}\]</div>
-<p>Lagrangian:</p>
+<p>The corresponding Lagrangian in the areoelastic framework is given by:</p>
 <div class="math notranslate nohighlight">
 \[\begin{split}\mathcal{L}(\mathbf{x}, \mathbf{q}, \mathbf{x}_{G}, \mathbf{u}_{A}, \mathbf{f}_{A}, \mathbf{f}_{S}, \mathbf{u}_S) = &amp;
   f(\mathbf{x}, \mathbf{q}, \mathbf{x}_{G}, \mathbf{u}_{A}, \mathbf{f}_{A}, \mathbf{f}_{S}, \mathbf{u}_S)
