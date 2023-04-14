@@ -398,7 +398,7 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
         # how many steps to take
         steps = scenario.steps
 
-        # Load current state
+        # Load current flow state (transfer from struct state)
         for body in self.model.bodies:
             body.transfer_disps(scenario, time_index=steps)
             body.transfer_temps(scenario, time_index=steps)
