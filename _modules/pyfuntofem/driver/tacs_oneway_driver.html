@@ -91,7 +91,7 @@
         <span class="n">nprocs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">external_shape</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        build the tacs analysis driver for shape/no shape change, assumes you have already primed the loads (see class method to assist with that)</span>
 
 <span class="sd">        Parameters</span>
@@ -167,7 +167,7 @@
 
 <div class="viewcode-block" id="TacsOnewayDriver.prime_loads"><a class="viewcode-back" href="../../../driver.html#pyfuntofem.driver.TacsOnewayDriver.prime_loads">[docs]</a>    <span class="nd">@classmethod</span>
     <span class="k">def</span> <span class="nf">prime_loads</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">funtofem_driver</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Used to prime struct loads for optimization over tacs analysis with no shape variables</span>
 
 <span class="sd">        Parameters</span>
@@ -182,7 +182,7 @@
     <span class="k">def</span> <span class="nf">prime_loads_shape</span><span class="p">(</span>
         <span class="bp">cls</span><span class="p">,</span> <span class="n">flow_solver</span><span class="p">,</span> <span class="n">tacs_aim</span><span class="p">,</span> <span class="n">transfer_settings</span><span class="p">,</span> <span class="n">nprocs</span><span class="p">,</span> <span class="n">bdf_file</span><span class="o">=</span><span class="kc">None</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Used to prime aero loads for optimization over tacs analysis with shape change and tacs aim</span>
 
 <span class="sd">        Parameters</span>
@@ -254,7 +254,7 @@
         <span class="n">tacs_aim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">external_shape</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Used to prime aero loads for optimization over tacs analysis with shape change and tacs aim</span>
 <span class="sd">        Built from an aero loads file of a previous CFD analysis in FuntofemNlbgs driver (TODO : make uncoupled fluid solver features)</span>
 <span class="sd">        The loads file is written from the FUNtoFEM model after a forward analysis of a flow solver</span>
@@ -354,7 +354,7 @@
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_aim</span><span class="o">.</span><span class="n">analysis_dir</span>
 
 <div class="viewcode-block" id="TacsOnewayDriver.input_paths"><a class="viewcode-back" href="../../../driver.html#pyfuntofem.driver.TacsOnewayDriver.input_paths">[docs]</a>    <span class="k">def</span> <span class="nf">input_paths</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dat_file_path</span><span class="p">,</span> <span class="n">analysis_dir</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        receive path information if the user is handling the shape optimization externally</span>
 
 <span class="sd">        Parameters</span>
@@ -370,7 +370,7 @@
         <span class="k">return</span></div>
 
     <span class="k">def</span> <span class="nf">_transfer_fixed_aero_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        transfer fixed aero loads over to the new</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># loop over each body to copy and transfer loads for the new structure</span>
@@ -409,7 +409,7 @@
         <span class="k">return</span>
 
 <div class="viewcode-block" id="TacsOnewayDriver.solve_forward"><a class="viewcode-back" href="../../../driver.html#pyfuntofem.driver.TacsOnewayDriver.solve_forward">[docs]</a>    <span class="k">def</span> <span class="nf">solve_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        forward analysis for the given shape and functionals</span>
 <span class="sd">        assumes shape variables have already been changed</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -450,7 +450,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_solve_unsteady_forward</span><span class="p">(</span><span class="n">scenario</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">bodies</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="TacsOnewayDriver.solve_adjoint"><a class="viewcode-back" href="../../../driver.html#pyfuntofem.driver.TacsOnewayDriver.solve_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">solve_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        solve the adjoint analysis for the given shape</span>
 <span class="sd">        assumes the forward analysis for this shape has already been performed</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -498,7 +498,7 @@
         <span class="k">return</span></div>
 
     <span class="k">def</span> <span class="nf">_extract_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">bodies</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;extract the coordinate derivatives at a given time step&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;extract the coordinate derivatives at a given time step&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">tacs_interface</span><span class="o">.</span><span class="n">get_coordinate_derivatives</span><span class="p">(</span>
             <span class="n">scenario</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">bodies</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="n">step</span>
         <span class="p">)</span>
@@ -511,7 +511,7 @@
         <span class="k">return</span>
 
     <span class="k">def</span> <span class="nf">_get_shape_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        get shape derivatives together from tacs aim</span>
 <span class="sd">        and store the data in the funtofem model</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -540,7 +540,7 @@
         <span class="k">return</span>
 
     <span class="k">def</span> <span class="nf">_solve_steady_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">bodies</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        solve the forward analysis of TACS analysis with aerodynamic loads</span>
 <span class="sd">        and heat fluxes from previous analysis still retained</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -566,7 +566,7 @@
         <span class="k">return</span> <span class="mi">0</span>
 
     <span class="k">def</span> <span class="nf">_solve_unsteady_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">bodies</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        solve the forward analysis of TACS analysis with aerodynamic loads</span>
 <span class="sd">        and heat fluxes from previous analysis still retained</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -589,7 +589,7 @@
         <span class="k">return</span> <span class="mi">0</span>
 
     <span class="k">def</span> <span class="nf">_solve_steady_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">bodies</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        solve the adjoint analysis of TACS analysis with aerodynamic loads</span>
 <span class="sd">        and heat fluxes from previous analysis still retained</span>
 <span class="sd">        Similar to funtofem_driver</span>
@@ -615,7 +615,7 @@
         <span class="k">return</span>
 
     <span class="k">def</span> <span class="nf">_solve_unsteady_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">bodies</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        solve the adjoint analysis of TACS analysis with aerodynamic loads</span>
 <span class="sd">        and heat fluxes from previous analysis still retained</span>
 <span class="sd">        Similar to funtofem_driver</span>
@@ -642,7 +642,7 @@
         <span class="k">return</span>
 
     <span class="k">def</span> <span class="nf">_zero_tacs_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        zero any TACS solution / adjoint data before running pure TACS</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
