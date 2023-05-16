@@ -69,6 +69,9 @@
 <span class="c1"># optional tacs import for caps2tacs</span>
 <span class="n">tacs_loader</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">find_spec</span><span class="p">(</span><span class="s2">&quot;tacs&quot;</span><span class="p">)</span>
 <span class="n">caps_loader</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">find_spec</span><span class="p">(</span><span class="s2">&quot;pyCAPS&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">caps_loader</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">pyfuntofem.interface.caps2fun</span> <span class="kn">import</span> <span class="n">Fun3dModel</span>
+
 <span class="k">if</span> <span class="n">tacs_loader</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">caps_loader</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
     <span class="kn">from</span> <span class="nn">tacs</span> <span class="kn">import</span> <span class="n">caps2tacs</span>
 
@@ -103,7 +106,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">bodies</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">composite_functions</span> <span class="o">=</span> <span class="p">[]</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_tacs_model</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_model</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_flow_model</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="FUNtoFEMmodel.add_body"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.FUNtoFEMmodel.add_body">[docs]</a>    <span class="k">def</span> <span class="nf">add_body</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -129,59 +133,9 @@
                 <span class="n">body</span><span class="o">.</span><span class="n">group_root</span> <span class="o">=</span> <span class="kc">False</span>
                 <span class="k">break</span>
 
-        <span class="c1"># if tacs loader and tacs model exist then create thickness variables and register to tacs model</span>
-        <span class="c1"># in the case of defining shell properties</span>
-        <span class="k">if</span> <span class="n">tacs_loader</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">struct_variables</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="n">shape_variables</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">if</span> <span class="s2">&quot;structural&quot;</span> <span class="ow">in</span> <span class="n">body</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
-                <span class="n">struct_variables</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s2">&quot;structural&quot;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="s2">&quot;shape&quot;</span> <span class="ow">in</span> <span class="n">body</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
-                <span class="n">shape_variables</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span>
-
-            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">struct_variables</span><span class="p">:</span>
-                <span class="c1"># check if matching shell property exists</span>
-                <span class="n">matching_prop</span> <span class="o">=</span> <span class="kc">False</span>
-                <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="o">.</span><span class="n">tacs_aim</span><span class="o">.</span><span class="n">_properties</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">prop</span><span class="o">.</span><span class="n">caps_group</span> <span class="o">==</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
-                        <span class="n">matching_prop</span> <span class="o">=</span> <span class="kc">True</span>
-                        <span class="k">break</span>
-
-                <span class="n">matching_dv</span> <span class="o">=</span> <span class="kc">False</span>
-                <span class="k">for</span> <span class="n">dv</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="o">.</span><span class="n">thickness_variables</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">dv</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
-                        <span class="n">matching_dv</span> <span class="o">=</span> <span class="kc">True</span>
-                        <span class="k">break</span>
-
-                <span class="k">if</span> <span class="n">matching_prop</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">matching_dv</span><span class="p">):</span>
-                    <span class="n">caps2tacs</span><span class="o">.</span><span class="n">ThicknessVariable</span><span class="p">(</span>
-                        <span class="n">caps_group</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">name</span>
-                    <span class="p">)</span><span class="o">.</span><span class="n">register_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="p">)</span>
-
-            <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">comm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="o">.</span><span class="n">comm</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="o">.</span><span class="n">root_proc</span><span class="p">:</span>
-                <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">despmtr</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-            <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">bcast</span><span class="p">(</span><span class="n">esp_caps_despmtrs</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-
-            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">shape_variables</span><span class="p">:</span>
-                <span class="n">matching_despmtr</span> <span class="o">=</span> <span class="kc">False</span>
-                <span class="k">for</span> <span class="n">despmtr</span> <span class="ow">in</span> <span class="n">esp_caps_despmtrs</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">despmtr</span><span class="p">:</span>
-                        <span class="n">matching_despmtr</span> <span class="o">=</span> <span class="kc">True</span>
-                        <span class="k">break</span>
-
-                <span class="n">matching_shape_dv</span> <span class="o">=</span> <span class="kc">False</span>
-                <span class="k">for</span> <span class="n">shape_var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span><span class="o">.</span><span class="n">shape_variables</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">shape_var</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
-                        <span class="n">matching_shape_dv</span> <span class="o">=</span> <span class="kc">True</span>
-                        <span class="k">break</span>
-
-                <span class="c1"># create a matching shape variable in caps2tacs</span>
-                <span class="k">if</span> <span class="n">matching_despmtr</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">matching_shape_dv</span><span class="p">:</span>
-                    <span class="n">caps2tacs</span><span class="o">.</span><span class="n">ShapeVariable</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">register_to</span><span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">tacs_model</span>
-                    <span class="p">)</span>
+        <span class="c1"># auto registration of variables to discipline models</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_struct_variables</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_flow_variables</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
 
         <span class="c1"># end of tacs model auto registration of vars section</span>
 
@@ -212,6 +166,10 @@
             <span class="k">if</span> <span class="n">scen</span><span class="o">.</span><span class="n">group</span> <span class="o">==</span> <span class="n">scenario</span><span class="o">.</span><span class="n">group</span><span class="p">:</span>
                 <span class="n">scenario</span><span class="o">.</span><span class="n">group_root</span> <span class="o">=</span> <span class="kc">False</span>
                 <span class="k">break</span>
+
+        <span class="c1"># auto registration of variables to discipline models</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_struct_variables</span><span class="p">(</span><span class="n">scenario</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_flow_variables</span><span class="p">(</span><span class="n">scenario</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">scenarios</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scenario</span><span class="p">)</span></div>
 
@@ -307,6 +265,107 @@
                         <span class="p">)</span>
 
         <span class="k">return</span></div>
+
+    <span class="k">def</span> <span class="nf">_send_struct_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;send variables to self.structural usually the TacsModel&quot;&quot;&quot;</span>
+        <span class="c1"># if tacs loader and tacs model exist then create thickness variables and register to tacs model</span>
+        <span class="c1"># in the case of defining shell properties</span>
+        <span class="k">if</span> <span class="n">tacs_loader</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">caps_loader</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="p">,</span> <span class="n">caps2tacs</span><span class="o">.</span><span class="n">TacsModel</span><span class="p">):</span>
+            <span class="n">struct_variables</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">shape_variables</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="s2">&quot;structural&quot;</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
+                <span class="n">struct_variables</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s2">&quot;structural&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s2">&quot;shape&quot;</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
+                <span class="n">shape_variables</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">struct_variables</span><span class="p">:</span>
+                <span class="c1"># check if matching shell property exists</span>
+                <span class="n">matching_prop</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="o">.</span><span class="n">tacs_aim</span><span class="o">.</span><span class="n">_properties</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">prop</span><span class="o">.</span><span class="n">caps_group</span> <span class="o">==</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                        <span class="n">matching_prop</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+
+                <span class="n">matching_dv</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">dv</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="o">.</span><span class="n">thickness_variables</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">dv</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                        <span class="n">matching_dv</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+
+                <span class="k">if</span> <span class="n">matching_prop</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">matching_dv</span><span class="p">):</span>
+                    <span class="n">caps2tacs</span><span class="o">.</span><span class="n">ThicknessVariable</span><span class="p">(</span>
+                        <span class="n">caps_group</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">name</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">register_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="p">)</span>
+
+            <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">comm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="o">.</span><span class="n">comm</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="o">.</span><span class="n">root_proc</span><span class="p">:</span>
+                <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">despmtr</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">bcast</span><span class="p">(</span><span class="n">esp_caps_despmtrs</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">shape_variables</span><span class="p">:</span>
+                <span class="n">matching_despmtr</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">despmtr</span> <span class="ow">in</span> <span class="n">esp_caps_despmtrs</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">despmtr</span><span class="p">:</span>
+                        <span class="n">matching_despmtr</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+
+                <span class="n">matching_shape_dv</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">shape_var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">structural</span><span class="o">.</span><span class="n">shape_variables</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">shape_var</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                        <span class="n">matching_shape_dv</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+
+                <span class="c1"># create a matching shape variable in caps2tacs</span>
+                <span class="k">if</span> <span class="n">matching_despmtr</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">matching_shape_dv</span><span class="p">:</span>
+                    <span class="n">caps2tacs</span><span class="o">.</span><span class="n">ShapeVariable</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">var</span><span class="o">.</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">register_to</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">structural</span>
+                    <span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">_send_flow_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;send variables to self.flow usually the Fun3dModel&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">caps_loader</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flow</span><span class="p">,</span> <span class="n">Fun3dModel</span><span class="p">):</span>
+            <span class="n">shape_variables</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">aero_variables</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="s2">&quot;shape&quot;</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
+                <span class="n">shape_variables</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s2">&quot;aerodynamic&quot;</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
+                <span class="n">aero_variables</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s2">&quot;aerodynamic&quot;</span><span class="p">]</span>
+
+            <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">comm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flow</span><span class="o">.</span><span class="n">comm</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flow</span><span class="o">.</span><span class="n">root_proc</span><span class="p">:</span>
+                <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flow</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">despmtr</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">esp_caps_despmtrs</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">bcast</span><span class="p">(</span><span class="n">esp_caps_despmtrs</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="n">active_shape_vars</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">active_aero_vars</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="c1"># add shape variable names to varnames</span>
+            <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">shape_variables</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">despmtr</span> <span class="ow">in</span> <span class="n">esp_caps_despmtrs</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">despmtr</span><span class="p">:</span>
+                        <span class="n">active_shape_vars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
+                        <span class="k">break</span>
+
+            <span class="c1"># NOTE : we&#39;ve decided to only use aero variables in FUN3D Fortran</span>
+            <span class="c1"># not in Fun3dAim for now...</span>
+
+            <span class="c1"># add aerodynamic variable names to varnames</span>
+            <span class="c1"># for var in aero_variables:</span>
+            <span class="c1">#     if var.active:</span>
+            <span class="c1">#         active_aero_vars.append(var)</span>
+
+            <span class="c1"># input the design parameters into the Fun3dModel and Fun3dAim</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">flow</span><span class="o">.</span><span class="n">set_variables</span><span class="p">(</span><span class="n">active_shape_vars</span><span class="p">,</span> <span class="n">active_aero_vars</span><span class="p">)</span>
+        <span class="k">return</span>
 
 <div class="viewcode-block" id="FUNtoFEMmodel.get_variables"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.FUNtoFEMmodel.get_variables">[docs]</a>    <span class="k">def</span> <span class="nf">get_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -769,13 +828,117 @@
 
         <span class="k">return</span></div>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span> <span class="nf">tacs_model</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tacs_model</span>
+<div class="viewcode-block" id="FUNtoFEMmodel.read_design_variables_file"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.FUNtoFEMmodel.read_design_variables_file">[docs]</a>    <span class="k">def</span> <span class="nf">read_design_variables_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Read the design variables file funtofem.in</span>
+<span class="sd">        This file contains the following information:</span>
+<span class="sd">        Discipline</span>
+<span class="sd">        Var_name Var_value</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        comm: MPI communicator</span>
+<span class="sd">            Global communicator across all FUNtoFEM processors</span>
+<span class="sd">        filename: str</span>
+<span class="sd">            The name of the file to be read in / filepath</span>
+<span class="sd">        root: int</span>
+<span class="sd">            The rank of the processor that will write the file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
 
-    <span class="nd">@tacs_model</span><span class="o">.</span><span class="n">setter</span>
-    <span class="k">def</span> <span class="nf">tacs_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m_tacs_model</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_tacs_model</span> <span class="o">=</span> <span class="n">m_tacs_model</span></div>
+        <span class="n">variables_dict</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># this will be broadcast to other processors</span>
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="n">root</span><span class="p">:</span>  <span class="c1"># read the file in on the root processor</span>
+            <span class="n">variables_dict</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="n">hdl</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span>
+            <span class="n">lines</span> <span class="o">=</span> <span class="n">hdl</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+            <span class="n">hdl</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+                <span class="n">chunks</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">var_name</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">var_value</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+                    <span class="c1"># only real numbers are read in from the file</span>
+                    <span class="n">variables_dict</span><span class="p">[</span><span class="n">var_name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">var_value</span><span class="p">)</span>
+
+        <span class="c1"># broadcast the dictionary to the root processor</span>
+        <span class="n">variables_dict</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">bcast</span><span class="p">(</span><span class="n">variables_dict</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+
+        <span class="c1"># update the variable values on each processor</span>
+        <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_variables</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">variables_dict</span><span class="p">:</span>
+                <span class="n">var</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">variables_dict</span><span class="p">[</span><span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+
+        <span class="k">return</span></div>
+
+<div class="viewcode-block" id="FUNtoFEMmodel.write_design_variables_file"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.FUNtoFEMmodel.write_design_variables_file">[docs]</a>    <span class="k">def</span> <span class="nf">write_design_variables_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the design variables file funtofem.in</span>
+<span class="sd">        This file contains the following information:</span>
+<span class="sd">        Discipline</span>
+<span class="sd">        Var_name Var_value</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        comm: MPI communicator</span>
+<span class="sd">            Global communicator across all FUNtoFEM processors</span>
+<span class="sd">        filename: str</span>
+<span class="sd">            The name of the file to be generated / filepath</span>
+<span class="sd">        root: int</span>
+<span class="sd">            The rank of the processor that will write the file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># get the variable values from the root processor</span>
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="n">root</span><span class="p">:</span>
+            <span class="c1"># get the disciplines and variables</span>
+            <span class="n">disciplines</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">variables</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">scenarios_and_bodies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scenarios</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bodies</span>
+            <span class="k">for</span> <span class="n">base</span> <span class="ow">in</span> <span class="n">scenarios_and_bodies</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">discipline</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">discipline</span> <span class="ow">in</span> <span class="n">disciplines</span><span class="p">):</span>
+                        <span class="n">disciplines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">discipline</span><span class="p">)</span>
+                        <span class="n">variables</span><span class="p">[</span><span class="n">discipline</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">discipline</span><span class="p">]:</span>
+                        <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">active</span><span class="p">:</span>
+                            <span class="n">variables</span><span class="p">[</span><span class="n">discipline</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
+
+            <span class="c1"># get the file hdl</span>
+            <span class="n">hdl</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span>
+
+            <span class="c1"># write the variables file</span>
+            <span class="k">for</span> <span class="n">discipline</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">variables</span><span class="p">[</span><span class="n">discipline</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span>
+                <span class="p">):</span>  <span class="c1"># skip this discipline if empty, aka rigid_motion</span>
+                    <span class="k">continue</span>
+                <span class="n">hdl</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Discipline </span><span class="si">{</span><span class="n">discipline</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+                <span class="c1"># write each variable from that discipline</span>
+                <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">[</span><span class="n">discipline</span><span class="p">]:</span>
+                    <span class="c1"># only real numbers written to this file</span>
+                    <span class="n">hdl</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">var </span><span class="si">{</span><span class="n">var</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">var</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">real</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">hdl</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="k">return</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">structural</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;structural discipline submodel such as TacsModel&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_model</span>
+
+    <span class="nd">@structural</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span> <span class="nf">structural</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">structural_model</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_model</span> <span class="o">=</span> <span class="n">structural_model</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">flow</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;flow discipline submodel such as Fun3dModel&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flow_model</span>
+
+    <span class="nd">@flow</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span> <span class="nf">flow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flow_model</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_flow_model</span> <span class="o">=</span> <span class="n">flow_model</span></div>
 </pre></div>
 
             <div class="clearer"></div>

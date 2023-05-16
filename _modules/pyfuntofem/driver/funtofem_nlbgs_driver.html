@@ -226,7 +226,10 @@
         <span class="n">fail</span> <span class="o">=</span> <span class="mi">0</span>
 
         <span class="c1"># how many steps to take for the block Gauss Seidel</span>
-        <span class="n">steps</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">steps</span>
+        <span class="k">if</span> <span class="n">scenario</span><span class="o">.</span><span class="n">adjoint_steps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">steps</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">steps</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">steps</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">adjoint_steps</span>
 
         <span class="c1"># Load the current state</span>
         <span class="k">for</span> <span class="n">body</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">bodies</span><span class="p">:</span>
