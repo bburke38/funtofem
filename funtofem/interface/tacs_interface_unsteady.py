@@ -487,6 +487,8 @@ class TacsUnsteadyInterface(SolverInterface):
         if self.tacs_proc:
             self._update_assembler_vars(scenario, bodies)
             self.ext_force.zeroEntries()
+            # This is not a real iterate call, TACS has a special case for index = 0
+            # that simply sets initial and boundary conditions and returns
             self.integrator[scenario.id].iterate(0, self.ext_force)
 
         return 0
