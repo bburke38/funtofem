@@ -269,14 +269,14 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                     )
                 steps = 1000
 
-        for time_index in range(1, steps + 1):
+        for index in range(1, steps + 1):
             # Transfer displacements and temperatures
             for body in self.model.bodies:
-                body.transfer_disps(scenario, time_index - 1, jump=True)
-                body.transfer_temps(scenario, time_index - 1, jump=True)
+                body.transfer_disps(scenario, index - 1, jump=True)
+                body.transfer_temps(scenario, index - 1, jump=True)
 
             # Take a step in the flow solver
-            fail = self.solvers.flow.iterate(scenario, self.model.bodies, time_index)
+            fail = self.solvers.flow.iterate(scenario, self.model.bodies, index)
 
             fail = self.comm.allreduce(fail)
             if fail != 0:
@@ -286,12 +286,12 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
 
             # Transfer the loads and heat flux
             for body in self.model.bodies:
-                body.transfer_loads(scenario, time_index)
-                body.transfer_heat_flux(scenario, time_index)
+                body.transfer_loads(scenario, index)
+                body.transfer_heat_flux(scenario, index)
 
             # Take a step in the FEM model
             fail = self.solvers.structural.iterate(
-                scenario, self.model.bodies, time_index
+                scenario, self.model.bodies, index
             )
 
             fail = self.comm.allreduce(fail)
@@ -331,20 +331,20 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
 
         # Loop over each time step in the reverse order
         for rstep in range(1, steps + 1):
-            step = steps - rstep + 1
+            index = steps - rstep + 1
 
             # load current state, affects MELD jacobians in the adjoint matrix (esp. load transfer)
             for body in self.model.bodies:
-                body.transfer_disps(scenario, time_index=step - 1, jump=True)
-                body.transfer_temps(scenario, time_index=step - 1, jump=True)
+                body.transfer_disps(scenario, time_index=index - 1, jump=True)
+                body.transfer_temps(scenario, time_index=index - 1, jump=True)
 
-            self.solvers.flow.set_states(scenario, self.model.bodies, step)
-            # Due to the staggering, we linearize the transfer about t_s^(n-1)
-            self.solvers.structural.set_states(scenario, self.model.bodies, step - 1)
+            self.solvers.flow.set_states(scenario, self.model.bodies, index)
+            
+            self.solvers.structural.set_states(scenario, self.model.bodies, index - 1)
 
             # take a step in the structural adjoint
             fail = self.solvers.structural.iterate_adjoint(
-                scenario, self.model.bodies, step
+                scenario, self.model.bodies, index
             )
 
             fail = self.comm.allreduce(fail)
@@ -357,7 +357,7 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                 body.transfer_loads_adjoint(scenario)
                 body.transfer_heat_flux_adjoint(scenario)
 
-            fail = self.solvers.flow.iterate_adjoint(scenario, self.model.bodies, step)
+            fail = self.solvers.flow.iterate_adjoint(scenario, self.model.bodies, index)
 
             fail = self.comm.allreduce(fail)
             if fail != 0:
@@ -370,7 +370,7 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                 body.transfer_temps_adjoint(scenario)
 
             # extract and accumulate coordinate derivative every step
-            self._extract_coordinate_derivatives(scenario, self.model.bodies, step)
+            self._extract_coordinate_derivatives(scenario, self.model.bodies, index)
 
         # end of solve loop
 
