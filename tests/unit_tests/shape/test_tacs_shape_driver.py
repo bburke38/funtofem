@@ -11,11 +11,7 @@ caps_loader = importlib.util.find_spec("pyCAPS")
 base_dir = os.path.dirname(os.path.abspath(__file__))
 csm_path = os.path.join(base_dir, "input_files", "simple_naca_wing.csm")
 dat_filepath = os.path.join(base_dir, "input_files", "simple_naca_wing.dat")
-
-results_folder = os.path.join(base_dir, "results")
-if comm.rank == 0:  # make the results folder if doesn't exist
-    if not os.path.exists(results_folder):
-        os.mkdir(results_folder)
+results_folder, _ = make_test_directories(comm, base_dir)
 
 if tacs_loader is not None and caps_loader is not None:
     from tacs import caps2tacs
@@ -87,7 +83,8 @@ class TestTacsSteadyShapeDriver(unittest.TestCase):
         caps2tacs.PinConstraint("root").register_to(tacs_model)
 
         # make a funtofem scenario
-        test_scenario = Scenario.steady("test", steps=10).include(Function.mass())
+        test_scenario = Scenario.steady("test", steps=10)
+        Function.mass().register_to(test_scenario)
         test_scenario.register_to(f2f_model)
 
         solvers = SolverManager(comm)
@@ -114,7 +111,6 @@ class TestTacsSteadyShapeDriver(unittest.TestCase):
         self.assertTrue(max_rel_error < rtol)
         return
 
-    @unittest.skip("temp")
     def test_shape_and_thick_steady_aeroelastic(self):
         # make the funtofem and tacs model
         f2f_model = FUNtoFEMmodel("wing")
@@ -196,7 +192,6 @@ class TestTacsSteadyShapeDriver(unittest.TestCase):
         self.assertTrue(max_rel_error < rtol)
         return
 
-    @unittest.skip("temp")
     @unittest.skipIf(in_github_workflow, "only run this test offline")
     def test_shape_steady_aerothermal(self):
         # make the funtofem and tacs model
@@ -276,7 +271,6 @@ class TestTacsSteadyShapeDriver(unittest.TestCase):
         self.assertTrue(max_rel_error < rtol)
         return
 
-    @unittest.skip("temp")
     @unittest.skipIf(in_github_workflow, "only run this test offline")
     def test_shape_steady_aerothermoelastic(self):
         # make the funtofem and tacs model

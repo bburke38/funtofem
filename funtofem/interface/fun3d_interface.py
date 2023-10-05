@@ -64,8 +64,20 @@ class Fun3dInterface(SolverInterface):
         comm: MPI.comm
             MPI communicator
         model: :class:`FUNtoFEMmodel`
-            FUNtoFEM model. This instantiatio
-            TODO
+            FUNtoFEM model. This is used to loop over different scenarios and bodies for the flow analysis.
+        fun3d_dir: path
+            location of the FUN3D directory which holds sub-dirs of scenarios (super-directory of each scenario)
+        forward_options: dict
+            list of forward options passed into FUN3D f2py objects - see unsteady FUN3D-TACS examples
+        adjoint_options
+            list of adjoint options passed into FUN3D f2py objects - see unsteady FUN3D-TACS examples
+        auto_coords: bool
+            whether the aerodynamic coordinates of FUN3D are pulled into the FUNtoFEM body class upon instantiation or not.
+            if not, then the _initialize_body_nodes() is called later (after the new aero mesh is built)
+        coord_test_override: bool
+            override the aero displacements in F2F to add fixed displacements for mesh morphing coordinate derivative tests
+        debug: bool
+            whether to print debug statements or not such as the real/imag norms of state vectors in FUN3D
         """
 
         self.comm = comm
@@ -275,8 +287,20 @@ class Fun3dInterface(SolverInterface):
 
         for function in scenario.functions:
             if function.adjoint:
-                start = 1 if function.stop == -1 else function.start
-                stop = 1 if function.stop == -1 else function.stop
+                unsteady = not (scenario.steady)
+                if function.analysis_type != "aerodynamic":
+                    start = 1
+                    stop = 1
+                else:
+                    start = 1 if function.start is None else function.start
+                    if unsteady:
+                        # default aero function to include all time steps for the unsteady case
+                        stop = (
+                            scenario.steps if function.stop is None else function.stop
+                        )
+                    else:
+                        stop = 1 if function.stop is None else function.stop
+
                 ftype = -1 if function.averaging else 1
 
                 interface.design_push_composite_func(
@@ -425,7 +449,7 @@ class Fun3dInterface(SolverInterface):
         for ibody, body in enumerate(bodies, 1):
             aero_nnodes = body.get_num_aero_nodes()
 
-            if aero_nnodes > 0:
+            if aero_nnodes > 0 and step > 0:
                 # Aero solver contribution = dGdxa0^T psi_G
                 # dx, dy, dz are the x, y, and z components of dG/dxA0
                 (

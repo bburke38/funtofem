@@ -86,7 +86,8 @@ class Fun3dRemote:
     ):
         """
 
-        Manages remote analysis calls for a FUN3D / FUNtoFEM driver call
+        Manages remote analysis calls for a FUN3D / FUNtoFEM driver call.
+
 
         Parameters
         ----------
@@ -98,6 +99,12 @@ class Fun3dRemote:
             location of the fun3d directory for meshes, one level above the scenario folders
         output_file: filepath
             optional location to write an output file for the forward and adjoint analysis
+        output_name: str
+            output files from the system call are of the form f"{output_name}.txt"
+        aero_name: str
+            aerodynamic mesh and sens files are of the form f"{aero_name}.*"
+        struct_name: str
+            structural mesh and sens files are of the form f"{struct_name}.*"
         """
         self.analysis_file = analysis_file
         self.fun3d_dir = fun3d_dir
@@ -107,7 +114,7 @@ class Fun3dRemote:
         self.struct_name = struct_name
 
     @classmethod
-    def paths(cls, fun3d_dir, aero_name="fun3d", struct_name="struct"):
+    def paths(cls, fun3d_dir, aero_name="fun3d", struct_name="tacs"):
         return cls(
             analysis_file=None,
             fun3d_dir=fun3d_dir,
@@ -258,6 +265,10 @@ class Fun3dOnewayDriver:
         if self.is_paired:  # if not mesh morphing initialize here
             self._initialize_funtofem()
 
+        # rare use case for no shape, not paired
+        if not self.is_paired and not self.change_shape:
+            self._initialize_funtofem()
+
         self._first_forward = True
 
         # shape optimization
@@ -359,7 +370,8 @@ class Fun3dOnewayDriver:
 
         # Write sens file for remote to read. Analysis functions/derivatives are being written to a file
         # to be read by the relevant AIM(s) which is in the remote driver.
-        if not self.is_remote:
+        write_sens_file = self.is_paired or self.change_shape
+        if not self.is_remote and write_sens_file:
             if not self.is_paired:
                 filepath = self.model.flow.fun3d_aim.sens_file_path
             else:
@@ -512,15 +524,11 @@ class Fun3dOnewayDriver:
 
         # initialize, run, and do post adjoint
         self.solvers.flow.initialize_adjoint(scenario, bodies)
-        for step in range(1, steps + 1):
+        # one extra call to match step 0 call (see fully coupled driver)
+        for step in range(1, steps + 2):
             self.solvers.flow.iterate_adjoint(scenario, bodies, step=step)
         self._extract_coordinate_derivatives(scenario, bodies, step=0)
         self.solvers.flow.post_adjoint(scenario, bodies)
-
-        # transfer disps adjoint since fa -> fs has shape dependency
-        # if self.change_shape:
-        #     for body in bodies:
-        #         body.transfer_disps_adjoint(scenario)
 
         # call get function gradients to store the gradients w.r.t. aero DVs from FUN3D
         self.solvers.flow.get_function_gradients(scenario, bodies)
@@ -537,17 +545,12 @@ class Fun3dOnewayDriver:
 
         # initialize, run, and do post adjoint
         self.solvers.flow.initialize_adjoint(scenario, bodies)
-        for rstep in range(scenario.steps + 1):
+        # one extra step here to include step 0 calls (see fully coupled driver)
+        for rstep in range(1, scenario.steps + 2):
             step = scenario.steps + 1 - rstep
             self.solvers.flow.iterate_adjoint(scenario, bodies, step=step)
             self._extract_coordinate_derivatives(scenario, bodies, step=step)
         self.solvers.flow.post_adjoint(scenario, bodies)
-        self._extract_coordinate_derivatives(scenario, bodies, step=0)
-
-        # transfer disps adjoint since fa -> fs has shape dependency
-        # if self.change_shape:
-        #     for body in bodies:
-        #         body.transfer_disps_adjoint(scenario)
 
         # call get function gradients to store the gradients w.r.t. aero DVs from FUN3D
         self.solvers.flow.get_function_gradients(scenario, bodies)
