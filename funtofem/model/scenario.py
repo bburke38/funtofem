@@ -96,7 +96,7 @@ class Scenario(Base):
         Optional Parameters/Constants
         -----------------------------
         fuel_bc_temperature: double
-            Fuel boundary condition temperature, used in conjunction with a thermal BC of 1 to specify internal temperature constraints. 
+            Fuel boundary condition temperature, used in conjunction with a thermal BC of 1 to specify internal temperature constraints.
             Units of K (absolute). This is the converted to a gauge temperature by T_ref.
         suther1: double
             First constant in Sutherland's two-constant viscosity model. Units of kg/m-s-K^0.5

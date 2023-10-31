@@ -212,7 +212,7 @@ class TacsSteadyInterface(SolverInterface):
 
         # Generate output
         self.gen_output = gen_output
-        
+
         # Fuel temperature boundary condition flag
         self.fuel_bc = fuel_bc
 
@@ -267,7 +267,7 @@ class TacsSteadyInterface(SolverInterface):
         self.struct_X = None
 
         self.vol = 1.0
-        
+
         # TACS vector to indicate where thermal BC's are applied
         self.thermal_bc_vec = None
 
@@ -289,7 +289,7 @@ class TacsSteadyInterface(SolverInterface):
             # required for AverageTemp function, not sure if needed on
             # body level
             self.vol = 1.0
-            
+
             # Allocate the thermal boundary condition index vector
             self.thermal_bc_vec = self.assembler.createVec()
 
@@ -346,7 +346,7 @@ class TacsSteadyInterface(SolverInterface):
                     self.dfdXpts.append(self.assembler.createNodeVec())
                     self.dfdu.append(self.assembler.createVec())
                     self.psi.append(self.assembler.createVec())
-                    
+
                 # Fuel temperature boundary condition adjoint
                 self.dfdfuel_bc_temperature = self.assembler.createDesignVec()
 
@@ -642,7 +642,7 @@ class TacsSteadyInterface(SolverInterface):
 
             # Add the contribution to the residuals from the external forces
             self.res.axpy(-1.0, self.ext_force)
-            
+
             # Add fuel temperature as boundary condition to residual
             if self.fuel_bc:
                 self.res.axpy(-scenario.fuel_bc_temperature, self.thermal_bc_vec)
@@ -654,7 +654,7 @@ class TacsSteadyInterface(SolverInterface):
             # data so that it is precisely statisfied
             self.ans.axpy(-1.0, self.update)
             self.assembler.setBCs(self.ans)
-            
+
             if self.fuel_bc:
                 bc_array = self.thermal_bc_vec.getArray()
                 ans_array = self.ans.getArray()
@@ -926,7 +926,7 @@ class TacsSteadyInterface(SolverInterface):
             # get df/dx if the function is a structural function
             self.assembler.addDVSens(func_list, dfdx)
             self.assembler.addAdjointResProducts(psi, dfdx)
-            
+
             if self.fuel_bc:
                 dfdfuel_bc_temperature = -psi.dot(self.thermal_bc_vec)
 
