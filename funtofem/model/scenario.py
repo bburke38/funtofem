@@ -52,6 +52,7 @@ class Scenario(Base):
         flow_dt=1.0,
         tacs_integration_settings=None,
         fun3d_project_name="funtofem_CAPS",
+        fuel_bc_temperature=0.0,
         suther1=1.458205e-6,
         suther2=110.3333,
         gamma=1.4,
@@ -94,6 +95,9 @@ class Scenario(Base):
 
         Optional Parameters/Constants
         -----------------------------
+        fuel_bc_temperature: double
+            Fuel boundary condition temperature, used in conjunction with a thermal BC of 1 to specify internal temperature constraints. 
+            Units of K (absolute). This is the converted to a gauge temperature by T_ref.
         suther1: double
             First constant in Sutherland's two-constant viscosity model. Units of kg/m-s-K^0.5
         suther2: double
@@ -130,6 +134,7 @@ class Scenario(Base):
         self.qinf = qinf
         self.flow_dt = flow_dt
 
+        self.fuel_bc_temperature = fuel_bc_temperature - self.T_ref
         self.suther1 = suther1
         self.suther2 = suther2
         self.gamma = gamma
