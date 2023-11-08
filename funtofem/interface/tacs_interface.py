@@ -35,6 +35,7 @@ class TacsInterface:
     """
     Base Creator class for TacsSteadyInterface or TacsUnsteadyInterface
     """
+    TACS_DESIGN_VARS = ["fuel-bc-temperature"]
 
     @classmethod
     def create_from_bdf(
@@ -47,7 +48,6 @@ class TacsInterface:
         callback=None,
         struct_options={},
         thermal_index=-1,
-        fuel_bc=False,
         debug=False,
     ):
         """
@@ -92,7 +92,6 @@ class TacsInterface:
                 callback=callback,
                 struct_options=struct_options,
                 thermal_index=thermal_index,
-                fuel_bc=fuel_bc,
                 debug=debug,
             )
         elif all(unsteady_list):
@@ -106,7 +105,6 @@ class TacsInterface:
                 callback=callback,
                 struct_options=struct_options,
                 thermal_index=thermal_index,
-                fuel_bc=fuel_bc,
                 debug=debug,
             )
         else:
@@ -129,10 +127,9 @@ class TacsSteadyInterface(SolverInterface):
         thermal_index=0,
         struct_id=None,
         tacs_comm=None,
-        override_rotx=False,
+        override_rotx=True,
         Fvec=None,
         nprocs=None,
-        fuel_bc=False,
         debug=False,
     ):
         """
@@ -169,8 +166,6 @@ class TacsSteadyInterface(SolverInterface):
             constant load vector such as for engine weight, if None then it is not used
         nprocs: int
             argument mainly for hidden use by drivers (matches tacs_comm)
-        fuel_bc: boolean
-            Whether to use scenario.fuel_bc_temperature to set internal temperature boundary conditions.
         """
 
         self.comm = comm
@@ -212,9 +207,6 @@ class TacsSteadyInterface(SolverInterface):
 
         # Generate output
         self.gen_output = gen_output
-
-        # Fuel temperature boundary condition flag
-        self.fuel_bc = fuel_bc
 
         # Debug flag
         self._debug = debug
@@ -292,6 +284,7 @@ class TacsSteadyInterface(SolverInterface):
 
             # Allocate the thermal boundary condition index vector
             self.thermal_bc_vec = self.assembler.createVec()
+            self.assembler.applyBCs(self.thermal_bc_vec)
 
             # Allocate the different solver pieces - the
             self.mat = mat
@@ -335,6 +328,7 @@ class TacsSteadyInterface(SolverInterface):
             self.dfdXpts = []
             self.dfdu = []
             self.psi = []
+            self.dfdfuel_bc_temperature = []
 
             if self.assembler is not None:
                 # Store the solution variables
@@ -346,9 +340,9 @@ class TacsSteadyInterface(SolverInterface):
                     self.dfdXpts.append(self.assembler.createNodeVec())
                     self.dfdu.append(self.assembler.createVec())
                     self.psi.append(self.assembler.createVec())
-
-                # Fuel temperature boundary condition adjoint
-                self.dfdfuel_bc_temperature = self.assembler.createDesignVec()
+                    
+                    # Fuel temperature boundary condition adjoint
+                    self.dfdfuel_bc_temperature.append(None)
 
             return
 
@@ -644,8 +638,9 @@ class TacsSteadyInterface(SolverInterface):
             self.res.axpy(-1.0, self.ext_force)
 
             # Add fuel temperature as boundary condition to residual
-            if self.fuel_bc:
-                self.res.axpy(-scenario.fuel_bc_temperature, self.thermal_bc_vec)
+            if scenario.use_fuel_bc():
+                fuel_bc_temperature = scenario.get_fuel_bc()
+                self.res.axpy(-fuel_bc_temperature, self.thermal_bc_vec)
 
             # Solve for the update
             self.gmres.solve(self.res, self.update)
@@ -655,12 +650,15 @@ class TacsSteadyInterface(SolverInterface):
             self.ans.axpy(-1.0, self.update)
             self.assembler.setBCs(self.ans)
 
-            if self.fuel_bc:
+            # Add fuel temperature to appropriate dofs of solution vector
+            if scenario.use_fuel_bc():
+                fuel_bc_temperature = scenario.get_fuel_bc()
+                print(fuel_bc_temperature, flush=True)
                 bc_array = self.thermal_bc_vec.getArray()
                 ans_array = self.ans.getArray()
                 for i in range(len(bc_array)):
                     if bc_array[i] != 0.0:
-                        ans_array[i] = scenario.fuel_bc_temperature
+                        ans_array[i] = fuel_bc_temperature
 
             # Set the variables into the assembler object
             self.assembler.setVariables(self.ans)
@@ -927,8 +925,9 @@ class TacsSteadyInterface(SolverInterface):
             self.assembler.addDVSens(func_list, dfdx)
             self.assembler.addAdjointResProducts(psi, dfdx)
 
-            if self.fuel_bc:
-                dfdfuel_bc_temperature = -psi.dot(self.thermal_bc_vec)
+            if scenario.use_fuel_bc():
+                for i, func in enumerate(func_list):
+                    self.scenario_data[scenario].dfdfuel_bc_temperature[i] = -psi[i].dot(self.thermal_bc_vec)
 
             # Add the values across processors - this is required to
             # collect the distributed design variable contributions
@@ -997,7 +996,7 @@ class TacsSteadyInterface(SolverInterface):
         callback=None,
         struct_options={},
         thermal_index=-1,
-        override_rotx=False,
+        override_rotx=True,
         debug=False,
     ):
         """

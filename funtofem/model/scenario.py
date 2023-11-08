@@ -52,7 +52,6 @@ class Scenario(Base):
         flow_dt=1.0,
         tacs_integration_settings=None,
         fun3d_project_name="funtofem_CAPS",
-        fuel_bc_temperature=0.0,
         suther1=1.458205e-6,
         suther2=110.3333,
         gamma=1.4,
@@ -134,7 +133,6 @@ class Scenario(Base):
         self.qinf = qinf
         self.flow_dt = flow_dt
 
-        self.fuel_bc_temperature = fuel_bc_temperature - self.T_ref
         self.suther1 = suther1
         self.suther2 = suther2
         self.gamma = gamma
@@ -249,6 +247,34 @@ class Scenario(Base):
                     return var
         if var is None:
             raise AssertionError(f"Can't find variable from scenario {self.name}")
+        
+    def use_fuel_bc(self):
+        """
+        Whether to use "thermal" variable "fuel_bc" to set internal temperature boundary conditions.
+        """
+        varname = "fuel_bc"
+        
+        thermal_vars = self.variables["thermal"]
+        for var in thermal_vars:
+            if var.name == varname:
+                return True
+        
+        return False
+    
+    def get_fuel_bc(self):
+        """
+        Utility to get the fuel temperature for this scenario.
+        """
+        fuel_temperature = None
+        
+        varname = "fuel_bc"
+        
+        thermal_vars = self.variables["thermal"]
+        for var in thermal_vars:
+            if var.name == varname:
+                fuel_temperature = var.value
+                
+        return fuel_temperature
 
     def add_variable(self, vartype, var: Variable):
         """
