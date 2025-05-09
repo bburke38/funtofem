@@ -54,7 +54,7 @@ my_fun3d_analyzer.py : fun3d analysis script, which is called indirectly from my
     - Construct the FUNtoFEMmodel
     - Construct the bodies and scenarios
     - Register aerodynamic DVs to the scenarios/bodies (no shape variables added and no AIMs here)
-    - Construct the Fun3dInterface
+    - Construct the Fun3d14Interface
     - Construct the solvers (SolverManager), and set solvers.flow = my_fun3d_interface
     - Construct the a fun3d oneway driver with class method OnewayAeroDriver.analysis
     - Run solve_forward() and solve_adjoint() on the Fun3dOnewayAnalyzer
@@ -75,7 +75,7 @@ import importlib.util
 # 1) FUN3D
 fun3d_loader = importlib.util.find_spec("fun3d")
 if fun3d_loader is not None:  # check whether we can import FUN3D
-    from funtofem.interface import Fun3dInterface, Fun3dModel
+    from funtofem.interface import Fun3d14Interface, Fun3dModel
 
 # 2) TBD
 # -----------------------------------------------------
@@ -180,6 +180,24 @@ class OnewayAeroDriver:
                     "The mesh morphing does not require a remote driver! Make this driver regularly!"
                 )
 
+        # check for unsteady problems
+        self._unsteady = any([not scenario.steady for scenario in model.scenarios])
+
+        # check which aero solver we were given
+        self.flow_aim = None
+        self._flow_solver_type = None
+        if model.flow is None:
+            if fun3d_loader is not None:
+                if isinstance(solvers.flow, Fun3d14Interface):
+                    self._flow_solver_type = "fun3d"
+            # TBD on new types
+        else:  # check with shape change
+            if fun3d_loader is not None:
+                if isinstance(model.flow, Fun3dModel):
+                    self._flow_solver_type = "fun3d"
+                    self.flow_aim = model.flow.fun3d_aim
+            # TBD on new types
+
         if not self.is_remote:
             if self.model.flow is not None:
                 if not self.is_paired and not self.model.flow.mesh_morph:
@@ -191,24 +209,6 @@ class OnewayAeroDriver:
                 print(
                     f"Warning!! You are trying to remesh without using remote system calls of FUN3D, this will likely cause a FUN3D bug."
                 )
-
-        # check for unsteady problems
-        self._unsteady = any([not scenario.steady for scenario in model.scenarios])
-
-        # check which aero solver we were given
-        self.flow_aim = None
-        self._flow_solver_type = None
-        if model.flow is None:
-            if fun3d_loader is not None:
-                if isinstance(solvers.flow, Fun3dInterface):
-                    self._flow_solver_type = "fun3d"
-            # TBD on new types
-        else:  # check with shape change
-            if fun3d_loader is not None:
-                if isinstance(model.flow, Fun3dModel):
-                    self._flow_solver_type = "fun3d"
-                    self.flow_aim = model.flow.fun3d_aim
-            # TBD on new types
 
         self.transfer_settings = (
             transfer_settings if transfer_settings is not None else TransferSettings()
@@ -340,8 +340,9 @@ class OnewayAeroDriver:
             sens_file_src = None
             if self.uses_fun3d and self.is_paired:
                 sens_file_src = self.remote.aero_sens_file
+                print(f"Remote aero sens file src: {sens_file_src}", flush=True)
 
-            # run the tacs aim postAnalysis to compute the chain rule product
+            # run the flow aim postAnalysis to compute the chain rule product
             self.flow_aim.post_analysis(sens_file_src)
 
             # get the analysis function values
@@ -457,7 +458,7 @@ class OnewayAeroDriver:
         self.solvers.flow.initialize(scenario, bodies)
         for step in range(1, scenario.steps + 1):
             self.solvers.flow.iterate(scenario, bodies, step=step)
-        self.solvers.flow.post(scenario, bodies)
+        self.solvers.flow.post(scenario, bodies, coupled_residuals=False)
 
         # get functions to store the function values into the model
         self.solvers.flow.get_functions(scenario, bodies)
@@ -472,7 +473,7 @@ class OnewayAeroDriver:
         self.solvers.flow.initialize(scenario, bodies)
         for step in range(1, scenario.steps + 1):
             self.solvers.flow.iterate(scenario, bodies, step=step)
-        self.solvers.flow.post(scenario, bodies)
+        self.solvers.flow.post(scenario, bodies, coupled_residuals=False)
 
         # get functions to store the function values into the model
         self.solvers.flow.get_functions(scenario, bodies)
@@ -495,10 +496,14 @@ class OnewayAeroDriver:
         # initialize, run, and do post adjoint
         self.solvers.flow.initialize_adjoint(scenario, bodies)
         # one extra call to match step 0 call (see fully coupled driver)
-        for step in range(1, steps + 2):
+        for step in range(1, steps + 1):
             self.solvers.flow.iterate_adjoint(scenario, bodies, step=step)
-        self._extract_coordinate_derivatives(scenario, bodies, step=0)
-        self.solvers.flow.post_adjoint(scenario, bodies)
+
+        # get the current step to extract derivatives
+        istep = scenario.adjoint_steps * scenario.adjoint_coupling_frequency
+
+        self._extract_coordinate_derivatives(scenario, bodies, step=steps)
+        self.solvers.flow.post_adjoint(scenario, bodies, coupled_residuals=False)
 
         # call get function gradients to store the gradients w.r.t. aero DVs from FUN3D
         self.solvers.flow.get_function_gradients(scenario, bodies)
@@ -520,7 +525,7 @@ class OnewayAeroDriver:
             step = scenario.steps + 1 - rstep
             self.solvers.flow.iterate_adjoint(scenario, bodies, step=step)
             self._extract_coordinate_derivatives(scenario, bodies, step=step)
-        self.solvers.flow.post_adjoint(scenario, bodies)
+        self.solvers.flow.post_adjoint(scenario, bodies, coupled_residuals=False)
 
         # call get function gradients to store the gradients w.r.t. aero DVs from FUN3D
         self.solvers.flow.get_function_gradients(scenario, bodies)
@@ -635,6 +640,79 @@ class OnewayAeroDriver:
                 func.add_gradient_component(var, derivative)
 
         return
+
+    def print_summary(self, print_model=False, print_comm=False):
+        """
+        Print out a summary of the FUNtoFEM driver for inspection.
+        """
+
+        print("\n\n==========================================================")
+        print("||               FUNtoFEM Driver Summary                ||")
+        print("==========================================================")
+        print(self)
+
+        self._print_shape_change()
+        self._print_transfer(print_comm=print_comm)
+
+        if print_model:
+            print(
+                "\nPrinting abbreviated model summary. For details print model summary directly."
+            )
+            self.model.print_summary(print_level=-1, ignore_rigid=True)
+
+        return
+
+    def _print_transfer(self, print_comm=False):
+        print("\n---------------------")
+        print("| Transfer Settings |")
+        print("---------------------")
+
+        print(f"  Elastic scheme:  {self.transfer_settings.elastic_scheme}")
+        print(f"    No. points: {self.transfer_settings.npts}")
+        print(f"    Beta: {self.transfer_settings.beta}")
+        print(f"  Thermal scheme:  {self.transfer_settings.thermal_scheme}")
+        print(f"    No. points: {self.transfer_settings.thermal_npts}")
+        print(f"    Beta: {self.transfer_settings.thermal_beta}\n")
+
+        if print_comm:
+            print(self.comm_manager)
+
+        return
+
+    def _print_shape_change(self):
+        _num_shape_vars = len(self.shape_variables)
+        print("\n--------------------")
+        print("|   Shape Change   |")
+        print("--------------------")
+
+        print(f"  No. shape variables: {_num_shape_vars}")
+        print(f"  Aerodynamic shape change: {self.aero_shape}")
+        print(f"  Structural shape change:  {self.struct_shape}")
+
+        print(f"  Meshing:", end=" ")
+        if self.is_paired:
+            # Remeshing
+            print(f" RE-MESH")
+            if self.change_shape:
+                print(f"    Remote is meshing.")
+            else:
+                print(f"    Analysis script is meshing.")
+        else:
+            # Morphing
+            print(f" MORPH")
+
+        return
+
+    def __str__(self):
+        line1 = f"Driver (<Type>): {self.__class__.__qualname__}"
+        line2 = f"  Using remote: {self.is_remote}"
+        line3 = f"  Flow solver type: {self._flow_solver_type}"
+        line4 = f"  Structural solver type: {self._struct_solver_type}"
+        line5 = f"    No. structural procs: {self.struct_nprocs}"
+
+        output = (line1, line2, line3, line4, line5)
+
+        return "\n".join(output)
 
     # @classmethod
     # def prime_disps(cls, funtofem_driver):
