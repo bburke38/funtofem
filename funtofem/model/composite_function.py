@@ -22,6 +22,7 @@ class CompositeFunction:
         optim=False,
         plot_name: str = None,
         plot: bool = False,
+        equ_name: str = None,
     ):
         """
         Define a function dependent on the analysis functions above
@@ -49,6 +50,7 @@ class CompositeFunction:
         self.variables = unique(variables)
         self.optim = optim
         self.analysis_type = "composite"
+        self.equ_name = equ_name
 
         # optimization settings
         self.lower = None
@@ -350,21 +352,25 @@ class CompositeFunction:
             def eval_hdl(funcs_dict):
                 return obj
 
-            return cls(name="float", eval_hdl=eval_hdl, functions=[], variables=[])
+            return cls(name=f"{obj}", eval_hdl=eval_hdl, functions=[], variables=[])
         else:
             raise AssertionError(
                 "Object is not setup to be casted to a composite function."
             )
 
     @classmethod
-    def combine(cls, name, eval_hdl, func1, func2):
+    def combine(cls, name, eval_hdl, func1, func2, equ_name=None):
         """combine two CompositeFunctions with a newly defined eval_hdl, mainly for under-the-hood arithmetic"""
         assert isinstance(func1, CompositeFunction)
         assert isinstance(func2, CompositeFunction)
         functions = func1.functions + func2.functions
         variables = func1.variables + func2.variables
         return cls(
-            name=name, eval_hdl=eval_hdl, functions=functions, variables=variables
+            name=name,
+            eval_hdl=eval_hdl,
+            functions=functions,
+            variables=variables,
+            equ_name=equ_name,
         )
 
     @classmethod
@@ -397,6 +403,7 @@ class CompositeFunction:
             eval_hdl=eval_hdl,
             functions=func.functions,
             variables=func.variables,
+            equ_name=f"abs({func.name})",
         )
 
     @classmethod
@@ -413,6 +420,7 @@ class CompositeFunction:
             eval_hdl=eval_hdl,
             functions=func.functions,
             variables=func.variables,
+            equ_name=f"exp({func.name})",
         )
 
     @classmethod
@@ -429,11 +437,12 @@ class CompositeFunction:
             eval_hdl=eval_hdl,
             functions=func.functions,
             variables=func.variables,
+            equ_name=f"sin({func.name})",
         )
 
     @classmethod
     def cos(cls, func):
-        """compute composite function for sin(func)"""
+        """compute composite function for cos(func)"""
 
         func = CompositeFunction.cast(func)
 
@@ -445,11 +454,12 @@ class CompositeFunction:
             eval_hdl=eval_hdl,
             functions=func.functions,
             variables=func.variables,
+            equ_name=f"cos({func.name})",
         )
 
     @classmethod
     def tan(cls, func):
-        """compute composite function for sin(func)"""
+        """compute composite function for tan(func)"""
 
         func = CompositeFunction.cast(func)
 
@@ -461,6 +471,7 @@ class CompositeFunction:
             eval_hdl=eval_hdl,
             functions=func.functions,
             variables=func.variables,
+            equ_name=f"tan({func.name})",
         )
 
     @classmethod
@@ -524,7 +535,11 @@ class CompositeFunction:
             return self.eval_hdl(funcs_dict) + func.eval_hdl(funcs_dict)
 
         return CompositeFunction.combine(
-            name=f"{self.name}+{func.name}", eval_hdl=eval_hdl, func1=self, func2=func
+            name=f"{self.name}+{func.name}",
+            eval_hdl=eval_hdl,
+            func1=self,
+            func2=func,
+            equ_name=f"{self.name}+{func.name}",
         )
 
     def __radd__(self, func):
@@ -534,7 +549,11 @@ class CompositeFunction:
             return self.eval_hdl(funcs_dict) + func.eval_hdl(funcs_dict)
 
         return CompositeFunction.combine(
-            name=f"{func.name}+{self.name}", eval_hdl=eval_hdl, func1=self, func2=func
+            name=f"{func.name}+{self.name}",
+            eval_hdl=eval_hdl,
+            func1=self,
+            func2=func,
+            equ_name=f"{func.name}+{self.name}",
         )
 
     def __sub__(self, func):
@@ -563,8 +582,21 @@ class CompositeFunction:
         def eval_hdl(funcs_dict):
             return self.eval_hdl(funcs_dict) * func.eval_hdl(funcs_dict)
 
+        if any(char in func.name for char in ["+", "-"]):
+            part2 = f"({func.name})"
+        else:
+            part2 = f"{func.name}"
+        if any(char in self.name for char in ["+", "-"]):
+            part1 = f"({self.name})"
+        else:
+            part1 = f"{self.name}"
+
         return CompositeFunction.combine(
-            name=f"{self.name}*{func.name}", eval_hdl=eval_hdl, func1=self, func2=func
+            name=f"{part1}*{part2}",
+            eval_hdl=eval_hdl,
+            func1=self,
+            func2=func,
+            equ_name=f"{part1}*{part2}",
         )
 
     def __rmul__(self, func):
@@ -573,8 +605,21 @@ class CompositeFunction:
         def eval_hdl(funcs_dict):
             return func.eval_hdl(funcs_dict) * self.eval_hdl(funcs_dict)
 
+        if any(char in func.name for char in ["+", "-"]):
+            part1 = f"({func.name})"
+        else:
+            part1 = f"{func.name}"
+        if any(char in self.name for char in ["+", "-"]):
+            part2 = f"({self.name})"
+        else:
+            part2 = f"{self.name}"
+
         return CompositeFunction.combine(
-            name=f"{func.name}*{self.name}", eval_hdl=eval_hdl, func1=self, func2=func
+            name=f"{part1}*{part2}",
+            eval_hdl=eval_hdl,
+            func1=self,
+            func2=func,
+            equ_name=f"{part1}*{part2}",
         )
 
     def __truediv__(self, func):
@@ -584,7 +629,11 @@ class CompositeFunction:
             return self.eval_hdl(funcs_dict) / func.eval_hdl(funcs_dict)
 
         return CompositeFunction.combine(
-            name=f"{self.name}/{func.name}", eval_hdl=eval_hdl, func1=self, func2=func
+            name=f"{self.name}/{func.name}",
+            eval_hdl=eval_hdl,
+            func1=self,
+            func2=func,
+            equ_name=f"({self.name})/({func.name})",
         )
 
     def __rtruediv__(self, func):
@@ -594,7 +643,11 @@ class CompositeFunction:
             return func.eval_hdl(funcs_dict) / self.eval_hdl(funcs_dict)
 
         return CompositeFunction.combine(
-            name=f"{func.name}/{self.name}", eval_hdl=eval_hdl, func1=self, func2=func
+            name=f"{func.name}/{self.name}",
+            eval_hdl=eval_hdl,
+            func1=self,
+            func2=func,
+            equ_name=f"({func.name})/({self.name})",
         )
 
     def __pow__(self, func):
@@ -611,14 +664,15 @@ class CompositeFunction:
             def eval_hdl(funcs_dict):
                 return self.eval_hdl(funcs_dict) ** func
 
-            func_name = "float"
+            func_name = f"{func}"
             functions = self.functions
             variables = self.variables
         else:
             raise AssertionError("Division Overload failed for unsupported type.")
         return CompositeFunction(
-            name=f"{self.name}**{func_name}",
+            name=f"({self.name})**({func_name})",
             eval_hdl=eval_hdl,
             functions=functions,
             variables=variables,
+            equ_name=f"({self.name})**({func_name})",
         )
