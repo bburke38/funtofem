@@ -37,6 +37,7 @@ import os, numpy as np
 from .tacs_interface_unsteady import TacsUnsteadyInterface
 from .utils.general_utils import real_norm, imag_norm
 from .utils.relaxation_utils import AitkenRelaxationTacs
+from .utils.tacs_utils import _resolve_ks_options
 
 from typing import TYPE_CHECKING
 
@@ -458,16 +459,9 @@ class TacsSteadyInterface(SolverInterface):
                     func_tag.append(0)
 
                 elif func.name.lower() == "ksfailure":
-                    options = func.options if func.options is not None else {}
-                    if "ksweight" in options:
-                        import warnings
-
-                        warnings.warn(
-                            "ksfailure option key 'ksweight' is deprecated, use 'ksWeight' instead.",
-                            DeprecationWarning,
-                            stacklevel=2,
-                        )
-                        options = {**options, "ksWeight": options.pop("ksweight")}
+                    options = _resolve_ks_options(
+                        func.options if func.options is not None else {}
+                    )
 
                     func_list.append(functions.KSFailure(self.assembler, **options))
                     func_tag.append(1)
@@ -509,16 +503,9 @@ class TacsSteadyInterface(SolverInterface):
                     func_tag.append(-1)
 
                 elif func.name.lower() == "ksdisplacement":
-                    options = func.options if func.options is not None else {}
-                    if "ksweight" in options:
-                        import warnings
-
-                        warnings.warn(
-                            "ksdisplacement option key 'ksweight' is deprecated, use 'ksWeight' instead.",
-                            DeprecationWarning,
-                            stacklevel=2,
-                        )
-                        options = {**options, "ksWeight": options.pop("ksweight")}
+                    options = _resolve_ks_options(
+                        func.options if func.options is not None else {}
+                    )
 
                     func_list.append(
                         functions.KSDisplacement(self.assembler, **options)
@@ -526,16 +513,9 @@ class TacsSteadyInterface(SolverInterface):
                     func_tag.append(1)
 
                 elif func.name.lower() == "kstemperature":
-                    options = func.options if func.options is not None else {}
-                    if "ksweight" in options:
-                        import warnings
-
-                        warnings.warn(
-                            "kstemperature option key 'ksweight' is deprecated, use 'ksWeight' instead.",
-                            DeprecationWarning,
-                            stacklevel=2,
-                        )
-                        options = {**options, "ksWeight": options.pop("ksweight")}
+                    options = _resolve_ks_options(
+                        func.options if func.options is not None else {}
+                    )
 
                     func_list.append(functions.KSTemperature(self.assembler, **options))
                     func_tag.append(1)

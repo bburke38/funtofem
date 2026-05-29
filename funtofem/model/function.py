@@ -273,7 +273,7 @@ class Function(object):
         cls,
         ks_weight: float = 50.0,
         safety_factor: float = 1.0,
-        ftype="continuous",
+        aggregation_type: str = "continuous",
     ):
         """
         Class constructor for the KS failure function.
@@ -284,7 +284,7 @@ class Function(object):
             ks weight used in the calculation
         safety_factor (float, optional):
             Safety factor used in the calculation
-        ftype (str, optional):
+        aggregation_type (str, optional):
             Type of KS aggregation.
             Accepted inputs are: 'discrete', 'continuous', 'pnorm-discrete', and 'pnorm-continuous'.
             Case-insensitive, defaults to 'continuous'.
@@ -296,7 +296,7 @@ class Function(object):
             options={
                 "ksWeight": ks_weight,
                 "safetyFactor": safety_factor,
-                "ftype": ftype,
+                "aggregation_type": aggregation_type,
             },
         )
 
@@ -404,7 +404,7 @@ class Function(object):
         cls,
         ks_weight: float = 100.0,
         direction=[0.0, 0.0, 0.0],
-        ftype="continuous",
+        aggregation_type: str = "continuous",
         plot_name: str = None,
     ):
         """
@@ -417,7 +417,7 @@ class Function(object):
         direction (array-like[double], optional):
             3D vector specifying which direction to project displacements in for KS aggregation.
             Defaults to [0, 0, 0].
-        ftype (str, optional):
+        aggregation_type (str, optional):
             Type of KS aggregation.
             Accepted inputs are: 'discrete', 'continuous', 'pnorm-discrete', and 'pnorm-continuous'.
             Case-insensitive, defaults to 'continuous'.
@@ -431,7 +431,7 @@ class Function(object):
             options={
                 "ksWeight": ks_weight,
                 "direction": direction,
-                "ftype": ftype,
+                "aggregation_type": aggregation_type,
             },
             plot_name=plot_name,
         )
@@ -440,7 +440,7 @@ class Function(object):
     def kstemperature(
         cls,
         ks_weight: float = 100.0,
-        ftype="continuous",
+        aggregation_type: str = "continuous",
         plot_name: str = None,
     ):
         """
@@ -450,7 +450,7 @@ class Function(object):
         ----------
         ks_weight (float, optional):
             ks weight used in the calculation
-        ftype (str, optional):
+        aggregation_type (str, optional):
             Type of KS aggregation.
             Accepted inputs are: 'discrete', 'continuous', 'pnorm-discrete', and 'pnorm-continuous'.
             Case-insensitive, defaults to 'continuous'.
@@ -463,7 +463,7 @@ class Function(object):
             analysis_type="structural",
             options={
                 "ksWeight": ks_weight,
-                "ftype": ftype,
+                "aggregation_type": aggregation_type,
             },
             plot_name=plot_name,
         )
