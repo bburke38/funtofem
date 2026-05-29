@@ -403,7 +403,7 @@ class Function(object):
     def ksdisplacement(
         cls,
         ks_weight: float = 100.0,
-        direction=[0.0, 0.0, 0.0],
+        direction=None,
         aggregation_type: str = "continuous",
         plot_name: str = None,
     ):
@@ -424,6 +424,8 @@ class Function(object):
         plot_name (str, optional):
             Plot name of the function as registered in FUNtoFEM.
         """
+        if direction is None:
+            direction = [0.0, 0.0, 0.0]
 
         return cls(
             name="ksdisplacement",
