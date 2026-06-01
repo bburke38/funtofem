@@ -34,6 +34,7 @@ from ._solver_interface import SolverInterface
 from typing import TYPE_CHECKING
 import os, numpy as np
 from .utils.general_utils import real_norm, imag_norm
+from .utils.tacs_utils import _resolve_ks_options
 
 
 class TacsIntegrationSettings:
@@ -330,24 +331,18 @@ class TacsUnsteadyInterface(SolverInterface):
                     func_tag.append(0)
 
                 elif func.name.lower() == "ksfailure":
-                    ksweight = 50.0
-                    if func.options is not None and "ksweight" in func.options:
-                        ksweight = func.options["ksweight"]
-                    safetyFactor = 1.0
-                    if func.options is not None and "safetyFactor" in func.options:
-                        safetyFactor = func.options["safetyFactor"]
-                    func_list.append(
-                        functions.KSFailure(
-                            self.assembler, ksWeight=ksweight, safetyFactor=safetyFactor
-                        )
+                    options = _resolve_ks_options(
+                        func.options if func.options is not None else {}
                     )
+
+                    func_list.append(functions.KSFailure(self.assembler, **options))
                     func_tag.append(1)
 
                 elif func.name.lower() == "compliance":
                     func_list.append(functions.Compliance(self.assembler))
                     func_tag.append(1)
 
-                elif func.name.lower() == "temperature":
+                elif func.name.lower() == "avg_temperature":
                     func_list.append(
                         functions.AverageTemperature(self.assembler, volume=self.vol)
                     )
@@ -363,6 +358,24 @@ class TacsUnsteadyInterface(SolverInterface):
                 elif func.name == "mass":
                     func_list.append(functions.StructuralMass(self.assembler))
                     func_tag.append(-1)
+
+                elif func.name.lower() == "ksdisplacement":
+                    options = _resolve_ks_options(
+                        func.options if func.options is not None else {}
+                    )
+
+                    func_list.append(
+                        functions.KSDisplacement(self.assembler, **options)
+                    )
+                    func_tag.append(1)
+
+                elif func.name.lower() == "kstemperature":
+                    options = _resolve_ks_options(
+                        func.options if func.options is not None else {}
+                    )
+
+                    func_list.append(functions.KSTemperature(self.assembler, **options))
+                    func_tag.append(1)
 
                 else:
                     print("WARNING: Unknown function being set into TACS set to mass")
