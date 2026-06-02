@@ -53,9 +53,6 @@ class OnewayStructTrimDriver(OnewayStructDriver):
 
         # save initial struct loads vectors for each scenario
         self._orig_struct_loads = {}
-        self.uncoupled_scenarios = [
-            scenario for scenario in model.scenarios if not (scenario.coupled)
-        ]
         for scenario in self.uncoupled_scenarios:
             self._orig_struct_loads[scenario.name] = {}
             for body in model.bodies:
