@@ -94,6 +94,11 @@ class Scenario(Base):
             the number of outer coupling steps in the scenario
         uncoupled_steps: int
             the number of fun3d iterations ran before coupled iterations
+        coupled: bool
+            Whether this scenario is a fully coupled aerostructural scenario (default True). Set to False
+            for uncoupled scenarios, e.g., when using OnewayStructDriver with pre-computed aerodynamic
+            loads. Uncoupled scenarios skip the fluid-structure coupling loop and are used by OnewayStructTrimDriver
+            to identify which scenarios to apply AOA load scaling to.
         adjoint_steps: int
             optional number of adjoint steps when using FUN3D analysis, can have different
             number of forward and adjoint steps in steady-state

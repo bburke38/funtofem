@@ -1435,8 +1435,6 @@ class Body(Base):
         Perform Aitken relaxation for the displacements set in the
         """
 
-        # pass
-
         # If Aitken relaxation is turned off, skip this
         if not (self.use_aitken_accel) and not (self.use_simple_accel):
             return
@@ -1472,9 +1470,6 @@ class Body(Base):
             if self.use_aitken_accel:
                 norm2 = np.linalg.norm(up - self.prev_update) ** 2.0
                 norm2 = comm.allreduce(norm2)
-
-                # if comm.rank == 0 and self.relaxation_scheme.debug:
-                #     print(f"Aitken norm2: {norm2}", flush=True)
 
                 # Only update theta if the displacements changed
                 # if norm2 > tol:
@@ -1525,9 +1520,6 @@ class Body(Base):
                 self._aitken_hdl.flush()
 
             # perform the aitken update for displacement transfer
-            # if comm.rank == 0:
-            #     print(f"Aitken vec update with {self.theta=:.2e}")
-
             self.aitken_vec += self.theta * up
             self.prev_update[:] = (
                 up[:] * self.theta

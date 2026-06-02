@@ -110,8 +110,10 @@ class OnewayStructDriver:
         self.uncoupled_scenarios = [
             scenario for scenario in model.scenarios if not (scenario.coupled)
         ]
-        any_uncoupled = any([not (scenario.coupled) for scenario in model.scenarios])
-        assert any_uncoupled
+        # backward compatibility: if no scenarios are explicitly marked uncoupled,
+        # treat all scenarios as uncoupled (original OnewayStructDriver behavior)
+        if len(self.uncoupled_scenarios) == 0:
+            self.uncoupled_scenarios = list(model.scenarios)
 
         # figure out which discipline solver we are using
         self._struct_solver_type = None
