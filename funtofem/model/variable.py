@@ -34,10 +34,10 @@ if tacs_loader is not None and caps_loader is not None:
 
 class Variable(object):
     """
-    Design variable type for FUNtoFEM. Valid variable types are "structural", "aerodynamic", and "shape". For example, invoked by "Variable.structural('thickness', 0.1)"
+    Design variable type for FUNtoFEM. Valid variable types are "structural", "aerodynamic", "shape", and "custom". For example, invoked by "Variable.structural('thickness', 0.1)"
     """
 
-    ANALYSIS_TYPES = ["structural", "aerodynamic", "shape"]
+    ANALYSIS_TYPES = ["structural", "aerodynamic", "shape", "custom"]
 
     def __init__(
         self,
@@ -172,6 +172,13 @@ class Variable(object):
         (make sure to set optimal settings and then register it)
         """
         return cls(name=name, value=value, analysis_type="shape")
+
+    @classmethod
+    def custom(cls, name: str, value=0.0):
+        """
+        Create a custom analysis variable.
+        """
+        return cls(name=name, value=value, analysis_type="custom")
 
     def rescale(self, factor: float):
         """
