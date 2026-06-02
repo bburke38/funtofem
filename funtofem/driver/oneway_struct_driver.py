@@ -425,7 +425,7 @@ class OnewayStructDriver:
         )
         if init_transfer:
             tacs_driver._transfer_fixed_aero_loads()
-            
+
         return tacs_driver
 
     @property
