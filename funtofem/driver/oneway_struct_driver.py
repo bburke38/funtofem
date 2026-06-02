@@ -361,6 +361,7 @@ class OnewayStructDriver:
         external_shape=False,
         init_transfer=False,
         timing_file=None,
+        **kwargs,
     ):
         """
         Used to prime aero loads for optimization over tacs analysis with shape change and tacs aim
@@ -420,9 +421,11 @@ class OnewayStructDriver:
             nprocs=nprocs,
             external_shape=external_shape,
             timing_file=timing_file,
+            **kwargs,
         )
         if init_transfer:
             tacs_driver._transfer_fixed_aero_loads()
+            
         return tacs_driver
 
     @property

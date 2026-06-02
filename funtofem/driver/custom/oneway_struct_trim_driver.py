@@ -74,47 +74,17 @@ class OnewayStructTrimDriver(OnewayStructDriver):
     ):
         # same as base class prime_loads_from_file but with extra input argument
         # aka initial_trim_dict
-        comm = solvers.comm
-        world_rank = comm.Get_rank()
-        if world_rank < nprocs:
-            color = 1
-        else:
-            color = MPI.UNDEFINED
-        tacs_comm = comm.Split(color, world_rank)
-
-        # initialize transfer settings
-        comm_manager = solvers.comm_manager
-
-        # read in the loads from the file
-        loads_data = model._read_aero_loads(comm, filename)
-
-        # initialize the transfer scheme then distribute aero loads
-        for body in model.bodies:
-            body.initialize_transfer(
-                comm=comm,
-                struct_comm=tacs_comm,
-                struct_root=comm_manager.struct_root,
-                aero_comm=comm_manager.aero_comm,
-                aero_root=comm_manager.aero_root,
-                transfer_settings=transfer_settings,
-            )
-            for scenario in model.scenarios:
-                body.initialize_variables(scenario)
-                assert scenario.steady
-            body._distribute_aero_loads(loads_data, steady=True)
-
-        tacs_driver = cls(
+        return super().prime_loads_from_file(
+            filename,
             solvers,
             model,
-            initial_trim_dict,
-            nprocs=nprocs,
+            nprocs,
+            transfer_settings,
             external_shape=external_shape,
+            init_transfer=init_transfer,
             timing_file=timing_file,
+            initial_trim_dict=initial_trim_dict,
         )
-        if init_transfer:
-            tacs_driver._transfer_fixed_aero_loads()
-
-        return tacs_driver
 
     def solve_forward(self):
 
