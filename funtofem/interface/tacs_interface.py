@@ -197,6 +197,11 @@ class TacsSteadyInterface(SolverInterface):
             Whether to use Aitken relaxation.
         struct_loads_file: str
             File name of the struct_loads_file to be used as a constant load to the structure.
+        tacs_panel_dimensions: ``TacsPanelDimensions`` object
+            helper class for length and width values of panels
+        mesh_loader: ``TACS pyMeshLoader`` object
+            Useful for getting component IDs of components in the structure.
+            Used to get local ksfailure.
         """
 
         self.comm = comm
@@ -1179,13 +1184,6 @@ class TacsSteadyInterface(SolverInterface):
                         struct_flux_ajp[:, ifunc] = -psi_array[
                             self.thermal_index :: ndof
                         ].astype(body.dtype)
-
-                # if ifunc == 1:
-                #     print(f"func {scenario.functions[1].full_name}, struct loads ajp = {struct_loads_ajp}")
-                #     print(f"any nan ? : {np.any(np.isnan(struct_loads_ajp))}")
-                #     exit(0)
-
-        # print(f"done with iterate adjoint", flush=True)
 
         return fail
 
