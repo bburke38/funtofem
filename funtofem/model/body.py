@@ -1528,7 +1528,9 @@ class Body(Base):
 
             # record max change in disps (for coupled conv check)
             self.current_disp_change_nrm = np.max(np.abs(self.theta * up))
-            self.current_disp_change_nrm = comm.allreduce(self.current_disp_change_nrm, op=MPI.MAX)
+            self.current_disp_change_nrm = comm.allreduce(
+                self.current_disp_change_nrm, op=MPI.MAX
+            )
             if first_iteration:
                 self.init_disp_change_nrm = self.current_disp_change_nrm * 1.0
 
@@ -1663,7 +1665,9 @@ class Body(Base):
 
                     # record max change in disps (for coupled conv check)
                     _current_change_nrm = np.max(np.abs(self.theta_adj[ifunc] * up))
-                    _current_change_nrm = comm.allreduce(_current_change_nrm, op=MPI.MAX)
+                    _current_change_nrm = comm.allreduce(
+                        _current_change_nrm, op=MPI.MAX
+                    )
                     self.current_adj_change_nrm[ifunc] = _current_change_nrm
                     if (
                         first_iteration
