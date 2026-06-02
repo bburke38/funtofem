@@ -73,12 +73,9 @@ class FUNtoFEMDriver(object):
             whether to save and reload funtofem states
         """
 
-        # assert at least one coupled scenario
+        # build list of coupled scenarios
         self.coupled_scenarios = []
         if model is not None:  # only case where model is None is fakeModel?
-            any_coupled = any([scenario.coupled for scenario in model.scenarios])
-            assert any_coupled
-
             self.coupled_scenarios = [
                 scenario for scenario in model.scenarios if scenario.coupled
             ]

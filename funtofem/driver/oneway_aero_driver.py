@@ -172,12 +172,14 @@ class OnewayAeroDriver:
         self.is_paired = is_paired
         self.external_shape = external_shape
 
-        # assert at least one uncoupled scenario
+        # build list of uncoupled scenarios
         self.uncoupled_scenarios = [
             scenario for scenario in model.scenarios if not (scenario.coupled)
         ]
-        any_uncoupled = any([not (scenario.coupled) for scenario in model.scenarios])
-        assert any_uncoupled
+        # backward compatibility: if no scenarios are explicitly marked uncoupled,
+        # treat all scenarios as uncoupled (original OnewayAeroDriver behavior)
+        if len(self.uncoupled_scenarios) == 0:
+            self.uncoupled_scenarios = list(model.scenarios)
 
         # store the shape variables list
         self.shape_variables = [
