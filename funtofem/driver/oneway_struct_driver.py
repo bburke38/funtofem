@@ -106,7 +106,7 @@ class OnewayStructDriver:
         self.struct_aim = None
         self.caps_only_thickness = caps_only_thickness
 
-        # assert at least one uncoupled scenario
+        # build list of uncoupled scenarios
         self.uncoupled_scenarios = [
             scenario for scenario in model.scenarios if not (scenario.coupled)
         ]
