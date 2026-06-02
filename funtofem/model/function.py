@@ -303,7 +303,7 @@ class Function(object):
     @classmethod
     def local_ksfailure(
         cls,
-        group_name: float,
+        group_name: int,
         comp_ids: np.ndarray,
         ks_weight: float = 50.0,
         safety_factor: float = 1.0,

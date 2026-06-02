@@ -465,14 +465,13 @@ class TacsSteadyInterface(SolverInterface):
                     options = _resolve_ks_options(
                         func.options if func.options is not None else {}
                     )
-      
+
                     ks_func = functions.KSFailure(self.assembler, **options)
                     if func.options is not None and "compIDs" in func.options:
                         compIDs = func.options["compIDs"]
                         elemIDs = self.mesh_loader.getLocalElementIDsForComps(compIDs)
                         # Finally set the domain information
                         ks_func.setDomain(elemIDs)
-                
 
                     func_list.append(ks_func)
                     func_tag.append(1)
