@@ -8,10 +8,20 @@ from .aflr_aim import Aflr3Aim, Aflr4Aim
 from .pointwise_aim import PointwiseAIM
 from .egads_aim import EgadsAim
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mpi4py import MPI
+
 
 class MeshAim:
     def __init__(
-        self, caps_problem, comm, volume_mesh="aflr3", surface_mesh="aflr4", root=0
+        self,
+        caps_problem,
+        comm: MPI.Comm,
+        volume_mesh="aflr3",
+        surface_mesh="aflr4",
+        root=0,
     ):
         """
         MPI wrapper class for setting up the mesh AIMs from ESP/CAPS.
@@ -45,6 +55,8 @@ class MeshAim:
 
         self._dictOptions = None
 
+        self._analysis_dir = None
+
         self._build_aim()
         return
 
@@ -68,11 +80,7 @@ class MeshAim:
 
     @property
     def analysis_dir(self):
-        _analysis_dir = None
-        if self.comm.rank == self.root:
-            _analysis_dir = self.volume_aim.aim.analysisDir
-        _analysis_dir = self.comm.bcast(_analysis_dir, root=self.root)
-        return _analysis_dir
+        return self._analysis_dir
 
     def link_surface_mesh(self):
         """link the surface mesh to volume mesh"""
@@ -82,12 +90,18 @@ class MeshAim:
             )
 
     def _build_aim(self):
+        _analysis_dir = None
         if self.root_proc:
             # self._vol_aim = self.volume_aim._build_sub_aim()
             # self._surf_aim = self.surface_aim._build_sub_aim()
             self.volume_aim._build_sub_aim()
             if self.surface_aim is not None:
                 self.surface_aim._build_sub_aim()
+
+            _analysis_dir = self.volume_aim.aim.analysisDir
+
+        self._analysis_dir = self.comm.bcast(_analysis_dir, root=self.root)
+
         return
 
     def saveDictOptions(self, dictOptions):
