@@ -2,6 +2,8 @@
 Written by Brian Burke and Sean Engelstad, Georgia Tech SMDO Lab, 2024.
 """
 
+from __future__ import annotations
+
 __all__ = ["MeshAim"]
 
 from .aflr_aim import Aflr3Aim, Aflr4Aim
