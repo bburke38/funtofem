@@ -429,6 +429,13 @@ class ParameterSweep:
         parameters:
         ``(comm, model, solvers, design_point, compute_adjoint)``.
 
+        The callback may optionally return the driver object it constructs.
+        If it does, the driver is passed through to the result extractor as the
+        ``driver`` argument, allowing the extractor to read residuals or other
+        solver state.  If the callback returns ``None`` (or has no return
+        statement), the extractor receives ``None`` for the driver argument —
+        the built-in default extractor handles this gracefully.
+
         Parameters
         ----------
         callback:
@@ -693,9 +700,11 @@ class ParameterSweep:
 
             # 3. Run the driver
             if self.sweep_driver is not None:
-                # Custom driver callback handles the solve
-                self.sweep_driver(comm, model, solvers, design_point, compute_adjoint)
-                driver = None
+                # Custom driver callback handles the solve; it may optionally
+                # return the driver object so the result extractor can access it
+                # (e.g. to read residuals). If it returns None, the extractor
+                # receives None for the driver argument.
+                driver = self.sweep_driver(comm, model, solvers, design_point, compute_adjoint)
                 # When using a custom driver with compute_adjoint=True,
                 # attempt gradient collection from the model directly
                 if compute_adjoint:
