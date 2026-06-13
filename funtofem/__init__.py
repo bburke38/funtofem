@@ -43,3 +43,5 @@ if mphys_loader is not None and openmdao_loader is not None:
         print(
             "Mphys module couldn't be built despite available openmdao and mphys packages."
         )
+
+from .sweep import *
