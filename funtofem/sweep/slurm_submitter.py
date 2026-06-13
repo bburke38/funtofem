@@ -7,6 +7,7 @@ mode and skip-completed logic.
 """
 
 import csv
+import datetime
 import json
 import os
 import subprocess
@@ -106,7 +107,9 @@ class SlurmSweepSubmitter:
             already have ``status = "success"``.
         """
         sweep = self.sweep
+        cfg = self.slurm_config
         design_points = sweep.strategy.generate(sweep.params)
+        n_total = len(design_points)
 
         # Build set of already-completed keys
         completed_keys: "set[str]" = set()
@@ -119,15 +122,18 @@ class SlurmSweepSubmitter:
                         if row.get("status") == "success":
                             completed_keys.add(row.get("key", ""))
 
-        # Submission results: list of (key, status, job_id_or_reason)
         submission_results: "list[tuple[str, str, str]]" = []
+        submitted = 0
+        skipped = 0
+        failed = 0
 
-        for design_point in design_points:
+        for idx, design_point in enumerate(design_points):
+            case_num = idx + 1
             key = _make_key(design_point, sweep.key_fn)
 
             if key in completed_keys:
-                print(f"[slurm] SKIP {key} (already completed)")
                 submission_results.append((key, "skipped", "already completed"))
+                skipped += 1
                 continue
 
             # 1. Write point.json
@@ -141,14 +147,9 @@ class SlurmSweepSubmitter:
             script_str = self._build_job_script(key, point_json_path)
 
             if dry_run:
-                # 3a. Dry run — print and record without submitting
-                print(f"[slurm] DRY RUN {key}")
-                print("-" * 60)
-                print(script_str)
-                print("-" * 60)
-                submission_results.append((key, "dry_run", ""))
+                submission_results.append((key, "dry_run", script_str))
             else:
-                # 3b. Submit via sbatch
+                # 3. Submit via sbatch
                 result = subprocess.run(
                     ["sbatch"],
                     input=script_str,
@@ -157,15 +158,23 @@ class SlurmSweepSubmitter:
                 )
                 if result.returncode == 0:
                     job_id = result.stdout.strip().split()[-1]
-                    print(f"[slurm] SUBMITTED {key} → job {job_id}")
                     submission_results.append((key, "submitted", job_id))
+                    submitted += 1
                 else:
                     reason = result.stderr.strip()
-                    print(f"[slurm] sbatch FAILED for key={key}: {reason}")
                     submission_results.append((key, "failed", reason))
+                    failed += 1
 
-        # 4. Write submission summary
-        self._write_summary(submission_results)
+        self._write_summary(
+            submission_results,
+            n_total=n_total,
+            submitted=submitted,
+            skipped=skipped,
+            failed=failed,
+            dry_run=dry_run,
+            skip_completed=skip_completed,
+            n_completed=len(completed_keys),
+        )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -221,23 +230,119 @@ class SlurmSweepSubmitter:
         )
         return script
 
-    def _write_summary(self, results: "list[tuple[str, str, str]]") -> None:
-        """Write the submission summary text file alongside the result CSV.
+    def _write_summary(
+        self,
+        results: "list[tuple[str, str, str]]",
+        *,
+        n_total: int,
+        submitted: int,
+        skipped: int,
+        failed: int,
+        dry_run: bool,
+        skip_completed: bool,
+        n_completed: int,
+    ) -> None:
+        """Write the submission summary file and echo everything to stdout.
 
-        The summary records each job's design key, submission status, and SLURM
-        job ID (or failure reason / empty string for dry-run).
+        The summary is appended to ``submission_summary.txt`` alongside the
+        result CSV, so multiple submission runs accumulate in one place.  Each
+        run is separated by a timestamped header and a footer with totals.
 
         Parameters
         ----------
         results : list[tuple[str, str, str]]
-            Each element is ``(key, status, job_id_or_reason)`` where *status*
-            is one of ``"submitted"``, ``"dry_run"``, ``"skipped"``,
-            ``"failed"``.
+            Each element is ``(key, status, detail)`` where *status* is one of
+            ``"submitted"``, ``"dry_run"``, ``"skipped"``, ``"failed"`` and
+            *detail* is the SLURM job ID, batch script text, skip reason, or
+            sbatch error message respectively.
+        n_total, submitted, skipped, failed : int
+            Counts used in the footer line.
+        dry_run : bool
+            Controls the footer wording and header flag line.
+        skip_completed : bool
+            When ``True``, the header notes how many points were skipped.
+        n_completed : int
+            Number of already-completed keys (printed when ``skip_completed``).
         """
-        summary_path = f"{self.sweep.output_csv}.submission_summary.txt"
-        with open(summary_path, "w") as f:
-            f.write("key\tstatus\tjob_id_or_reason\n")
-            f.write("-" * 60 + "\n")
-            for key, status, detail in results:
-                f.write(f"{key}\t{status}\t{detail}\n")
+        sweep = self.sweep
+        cfg = self.slurm_config
+
+        summary_dir = os.path.dirname(sweep.output_csv) or "."
+        summary_path = os.path.join(summary_dir, "submission_summary.txt")
+
+        # Generate the full key map for reference
+        all_points = sweep.strategy.generate(sweep.params)
+        all_keys = [_make_key(pt, sweep.key_fn) for pt in all_points]
+
+        with open(summary_path, "a") as summary_file:
+
+            def log(msg=""):
+                print(msg)
+                print(msg, file=summary_file)
+
+            # --- Header ---
+            nodes = cfg.get("nodes", "?")
+            ntasks = cfg.get("ntasks_per_node", "?")
+            nprocs = (
+                nodes * ntasks
+                if isinstance(nodes, int) and isinstance(ntasks, int)
+                else "?"
+            )
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log(f"\n{'='*60}")
+            log(f"  Parameter sweep launcher  [{timestamp}]")
+            log(f"  Total design points : {n_total}")
+            for param_name, values in sweep.params.items():
+                log(f"  {param_name:<20}: {values}")
+            log(f"  Account             : {cfg.get('account', '?')}")
+            log(
+                f"  Partition / QOS     : {cfg.get('partition', '?')} / {cfg.get('qos', '?')}"
+            )
+            log(
+                f"  Nodes / tasks       : {nodes} nodes x {ntasks} tasks = {nprocs} MPI ranks"
+            )
+            log(f"  Walltime            : {cfg.get('walltime', '?')}")
+            log(f"  Sweep script        : {self.sweep_script}")
+            log(f"  Output CSV          : {sweep.output_csv}")
+            if skip_completed:
+                log(f"  Skipping {n_completed} already-completed case(s).")
+            if dry_run:
+                log(f"  DRY RUN — no jobs will be submitted.")
+            log(f"{'='*60}\n")
+
+            # --- Key map ---
+            log("Design point key mapping")
+            log("-" * 60)
+            for key, point in zip(all_keys, all_points):
+                params_str = "  ".join(f"{k}={v}" for k, v in point.items())
+                log(f"  {key}  {params_str}")
+            log()
+
+            # --- Per-job lines ---
+            for idx, (key, status, detail) in enumerate(results):
+                case_num = idx + 1
+                if status == "skipped":
+                    log(f"[{case_num}/{n_total}] SKIP       {key}  (already completed)")
+                elif status == "submitted":
+                    log(f"[{case_num}/{n_total}] SUBMITTED  {key}  → job {detail}")
+                elif status == "failed":
+                    log(f"[{case_num}/{n_total}] FAILED     {key}")
+                    log(f"  sbatch stderr: {detail}")
+                elif status == "dry_run":
+                    log(f"[{case_num}/{n_total}] DRY RUN    {key}")
+                    log("-" * 50)
+                    log(detail)
+                    log("-" * 50)
+
+            # --- Footer ---
+            if dry_run:
+                log(
+                    f"\nDry run complete. "
+                    f"{n_total - skipped} script(s) previewed, {skipped} skipped.\n"
+                )
+            else:
+                log(
+                    f"\nDone. {submitted} submitted, {skipped} skipped, {failed} failed.\n"
+                )
+
         print(f"[slurm] Submission summary written to: {summary_path}")
