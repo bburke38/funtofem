@@ -111,6 +111,12 @@ class SlurmSweepSubmitter:
         design_points = sweep.strategy.generate(sweep.params)
         n_total = len(design_points)
 
+        # Create caps_subdir once here on the login node before any jobs are
+        # submitted, so pyCAPS can create problem directories inside it without
+        # racing across parallel jobs.
+        if sweep.caps_subdir:
+            os.makedirs(sweep.caps_subdir, exist_ok=True)
+
         # Build set of already-completed keys
         completed_keys: "set[str]" = set()
         if skip_completed:

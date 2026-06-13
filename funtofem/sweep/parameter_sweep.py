@@ -603,6 +603,11 @@ class ParameterSweep:
         """
         caps_problem_name = _make_caps_problem_name(self.caps_subdir, key)
 
+        # Ensure caps_subdir exists before any mesh callback tries to use it.
+        # Using exist_ok=True makes this safe for concurrent MPI ranks.
+        if self.caps_subdir:
+            os.makedirs(self.caps_subdir, exist_ok=True)
+
         if self.mesh_mode == MeshMode.FULL_REGEN:
             self.cfd_mesh_callback(
                 comm, design_point, caps_problem_name, cfd_output_dir
@@ -708,11 +713,9 @@ class ParameterSweep:
                         "funtofem native libraries are built"
                     )
 
-                driver = FUNtoFEMnlbgs(solvers, model)
-                if self.transfer_settings is not None:
-                    driver = FUNtoFEMnlbgs(
-                        solvers, model, transfer_settings=self.transfer_settings
-                    )
+                driver = FUNtoFEMnlbgs(
+                    solvers, model=model, transfer_settings=self.transfer_settings
+                )
                 driver.solve_forward()
                 if compute_adjoint:
                     driver.solve_adjoint()
