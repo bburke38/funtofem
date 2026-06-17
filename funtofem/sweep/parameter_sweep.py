@@ -893,16 +893,27 @@ class ParameterSweep:
         csv_exists = os.path.exists(self.output_csv)
 
         if csv_exists:
-            # Read existing header to preserve column order and avoid duplicate header
+            # Read existing header to check for new columns
             with open(self.output_csv, "r", newline="") as f:
                 reader = csv.reader(f)
                 existing_header = next(reader, None)
+                existing_rows = list(csv.DictReader(f)) if existing_header else []
+
             if existing_header is not None:
-                # Add any new columns not in the existing header
-                for col in fieldnames:
-                    if col not in existing_header:
-                        existing_header.append(col)
-                fieldnames = existing_header
+                new_cols = [col for col in fieldnames if col not in existing_header]
+                if new_cols:
+                    # New columns discovered — rewrite the entire file with the
+                    # expanded header so no data is silently dropped
+                    updated_header = existing_header + new_cols
+                    with open(self.output_csv, "w", newline="") as f:
+                        writer = csv.DictWriter(
+                            f, fieldnames=updated_header, extrasaction="ignore"
+                        )
+                        writer.writeheader()
+                        writer.writerows(existing_rows)
+                    fieldnames = updated_header
+                else:
+                    fieldnames = existing_header
 
         # Write to CSV
         mode = "a" if csv_exists else "w"
