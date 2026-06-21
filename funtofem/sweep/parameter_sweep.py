@@ -704,7 +704,9 @@ class ParameterSweep:
                 # return the driver object so the result extractor can access it
                 # (e.g. to read residuals). If it returns None, the extractor
                 # receives None for the driver argument.
-                driver = self.sweep_driver(comm, model, solvers, design_point, compute_adjoint)
+                driver = self.sweep_driver(
+                    comm, model, solvers, design_point, compute_adjoint
+                )
                 # When using a custom driver with compute_adjoint=True,
                 # attempt gradient collection from the model directly
                 if compute_adjoint:
@@ -897,7 +899,13 @@ class ParameterSweep:
             with open(self.output_csv, "r", newline="") as f:
                 reader = csv.reader(f)
                 existing_header = next(reader, None)
-                existing_rows = list(csv.DictReader(f)) if existing_header else []
+                # Pass fieldnames explicitly so DictReader doesn't re-consume
+                # the first data row as a header (f is already past line 1).
+                existing_rows = (
+                    list(csv.DictReader(f, fieldnames=existing_header))
+                    if existing_header
+                    else []
+                )
 
             if existing_header is not None:
                 new_cols = [col for col in fieldnames if col not in existing_header]
