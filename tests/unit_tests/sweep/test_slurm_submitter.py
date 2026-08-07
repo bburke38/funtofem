@@ -339,7 +339,9 @@ class TestSkipCompleted:
         assert failed_key in content
         assert "DRY RUN" in content
         # Should not appear as skipped
-        skip_lines = [l for l in content.splitlines() if "SKIP" in l and failed_key in l]
+        skip_lines = [
+            l for l in content.splitlines() if "SKIP" in l and failed_key in l
+        ]
         assert not skip_lines, "Failed point should not be skipped"
 
     def test_skip_completed_no_csv_processes_all(self, tmp_path):
