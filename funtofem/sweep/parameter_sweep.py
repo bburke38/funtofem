@@ -208,12 +208,12 @@ def _validate_callback_arity(callback, expected: int, name: str) -> None:
 
 class ParameterSweep:
     """Callback-driven parameter sweep orchestration for FUNtoFEM.
-    
+
     .. warning::
 
         **Experimental.** ``funtofem.sweep`` is under active development. Its
         API may change in a backwards-incompatible way without a deprecation
-        cycle. 
+        cycle.
 
     :class:`ParameterSweep` accepts a parameter space and a set of user-supplied
     callbacks, then drives the full sweep lifecycle: design-point enumeration,
@@ -239,11 +239,25 @@ class ParameterSweep:
         or ``""`` produces the bare key.  Defaults to ``"caps"``.
     cfd_root:
         Root directory for per-point CFD output.  Each design point writes to
-        ``"<cfd_root>/<key>"``.  Defaults to ``"cfd"``.
+        ``"<cfd_root>/<key>/cfd"``.  Defaults to ``"sweep_output"``.
     struct_root:
         Root directory for per-point structural output.  Each design point
         writes to ``"<struct_root>/<key>/struct"``.  Defaults to
-        ``"struct"``.
+        ``"sweep_output"``.
+
+        ``cfd_root`` and ``struct_root`` share the same ``<root>/<key>/<kind>``
+        layout, so leaving both at the default collects everything for a design
+        point under a single directory::
+
+            sweep_output/<key>/cfd/
+            sweep_output/<key>/struct/
+
+        Setting them to different roots splits the two trees instead — useful
+        when CFD output is large enough to belong on scratch while structural
+        results stay on a backed-up filesystem.  Note that
+        :class:`~funtofem.sweep.SlurmSweepSubmitter` writes each point's
+        ``point.json`` to ``"<cfd_root>/<key>/point.json"``, so when the roots
+        differ the point file follows ``cfd_root``.
     output_csv:
         Path to the result CSV file written (and appended to) during the sweep.
         Defaults to ``"sweep_results.csv"``.
@@ -270,8 +284,8 @@ class ParameterSweep:
         strategy: "SweepStrategy | None" = None,
         mesh_mode: MeshMode = MeshMode.FULL_REGEN,
         caps_subdir: "str | None" = "caps",
-        cfd_root: str = "cfd",
-        struct_root: str = "struct",
+        cfd_root: str = "sweep_output",
+        struct_root: str = "sweep_output",
         output_csv: str = "sweep_results.csv",
         key_fn: "Callable[[dict], str] | None" = None,
     ) -> None:
@@ -577,10 +591,10 @@ class ParameterSweep:
         -------
         tuple[str, str]
             ``(cfd_output_dir, struct_output_dir)`` where:
-            - ``cfd_output_dir = f"{self.cfd_root}/{key}"``
+            - ``cfd_output_dir = f"{self.cfd_root}/{key}/cfd"``
             - ``struct_output_dir = f"{self.struct_root}/{key}/struct"``
         """
-        cfd_output_dir = f"{self.cfd_root}/{key}"
+        cfd_output_dir = f"{self.cfd_root}/{key}/cfd"
         struct_output_dir = f"{self.struct_root}/{key}/struct"
         return cfd_output_dir, struct_output_dir
 

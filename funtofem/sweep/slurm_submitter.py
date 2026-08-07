@@ -17,12 +17,12 @@ from .parameter_sweep import _make_key
 
 class SlurmSweepSubmitter:
     """Submit one SLURM batch job per design point in a :class:`ParameterSweep`.
-    
+
     .. warning::
 
         **Experimental.** ``funtofem.sweep`` is under active development. Its
         API may change in a backwards-incompatible way without a deprecation
-        cycle. 
+        cycle.
 
     For each design point the submitter:
 
@@ -36,7 +36,11 @@ class SlurmSweepSubmitter:
     ----------
     sweep : ParameterSweep
         Configured :class:`ParameterSweep` instance.  Used to enumerate design
-        points and to locate the result CSV and ``cfd_root``.
+        points and to locate the result CSV and ``cfd_root``.  The point file is
+        written one level above the CFD output directory, so with the default
+        roots it sits alongside the ``cfd/`` and ``struct/`` directories for that
+        point.  When ``cfd_root`` and ``struct_root`` differ, ``point.json``
+        follows ``cfd_root``.
     slurm_config : dict
         SLURM scheduler options.  Required keys: ``account``, ``partition``,
         ``qos``, ``nodes``, ``ntasks_per_node``, ``walltime``.

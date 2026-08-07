@@ -127,9 +127,7 @@ class ZipStrategy(SweepStrategy):
         lengths = [len(v) for v in values]
 
         if len(set(lengths)) > 1:
-            detail = ", ".join(
-                f"{k!r}: {n}" for k, n in zip(keys, lengths)
-            )
+            detail = ", ".join(f"{k!r}: {n}" for k, n in zip(keys, lengths))
             raise ValueError(
                 f"ZipStrategy requires all parameter lists to have equal length, "
                 f"but got differing lengths — {detail}"
