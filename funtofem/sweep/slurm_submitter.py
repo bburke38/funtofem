@@ -17,6 +17,12 @@ from .parameter_sweep import _make_key
 
 class SlurmSweepSubmitter:
     """Submit one SLURM batch job per design point in a :class:`ParameterSweep`.
+    
+    .. warning::
+
+        **Experimental.** ``funtofem.sweep`` is under active development. Its
+        API may change in a backwards-incompatible way without a deprecation
+        cycle. 
 
     For each design point the submitter:
 
