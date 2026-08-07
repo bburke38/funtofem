@@ -208,6 +208,12 @@ def _validate_callback_arity(callback, expected: int, name: str) -> None:
 
 class ParameterSweep:
     """Callback-driven parameter sweep orchestration for FUNtoFEM.
+    
+    .. warning::
+
+        **Experimental.** ``funtofem.sweep`` is under active development. Its
+        API may change in a backwards-incompatible way without a deprecation
+        cycle. 
 
     :class:`ParameterSweep` accepts a parameter space and a set of user-supplied
     callbacks, then drives the full sweep lifecycle: design-point enumeration,
