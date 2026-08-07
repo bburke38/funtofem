@@ -20,52 +20,44 @@ import unittest
 from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
-# Import directly from the sweep subpackage to avoid pulling in native TACS/FUN3D
+# Load the sweep subpackage under a private alias.
+#
+# These tests must not import the top-level funtofem package, which pulls in
+# the native TACS/FUN3D extensions. They also must not leave a stub named
+# "funtofem" in sys.modules: testflo imports every test module into a single
+# process, so a stub would shadow the real package for the tests that run
+# later. Loading the subpackage as "_f2f_sweep_test.sweep" keeps the sweep
+# modules' relative imports working while leaving "funtofem" untouched.
 # ---------------------------------------------------------------------------
 import importlib.util
 import pathlib
 
-_SWEEP_PKG = pathlib.Path(__file__).parents[3] / "funtofem" / "sweep"
+_SWEEP_DIR = pathlib.Path(__file__).parents[3] / "funtofem" / "sweep"
+SWEEP_ROOT_PKG = "_f2f_sweep_test"
+SWEEP_PKG = f"{SWEEP_ROOT_PKG}.sweep"
 
+if SWEEP_PKG not in sys.modules:
+    _root = types.ModuleType(SWEEP_ROOT_PKG)
+    # Empty __path__ so the lazy "from ..driver import FUNtoFEMnlbgs" inside
+    # parameter_sweep raises ImportError (which that call site handles) instead
+    # of reaching the real funtofem.driver and its native dependencies.
+    _root.__path__ = []
+    sys.modules[SWEEP_ROOT_PKG] = _root
 
-def _load_sweep_module(name: str):
-    spec = importlib.util.spec_from_file_location(
-        f"funtofem.sweep.{name}",
-        str(_SWEEP_PKG / f"{name}.py"),
+    _spec = importlib.util.spec_from_file_location(
+        SWEEP_PKG,
+        str(_SWEEP_DIR / "__init__.py"),
+        submodule_search_locations=[str(_SWEEP_DIR)],
     )
-    # No submodule_search_locations: these are plain modules, not packages.
-    # module_from_spec then derives __package__ = "funtofem.sweep" from
-    # spec.parent, which is what the modules' relative imports need. Setting
-    # __package__ by hand while the spec says "package" makes them disagree
-    # and Python emits ImportWarning: __package__ != __spec__.parent.
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[f"funtofem.sweep.{name}"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    _pkg = importlib.util.module_from_spec(_spec)
+    sys.modules[SWEEP_PKG] = _pkg
+    _root.sweep = _pkg
+    _spec.loader.exec_module(_pkg)
 
+_sweep = sys.modules[SWEEP_PKG]
 
-# Ensure funtofem package stub exists
-if "funtofem" not in sys.modules:
-    _funtofem_stub = types.ModuleType("funtofem")
-    _funtofem_stub.__path__ = [str(pathlib.Path(__file__).parents[3] / "funtofem")]
-    _funtofem_stub.__package__ = "funtofem"
-    sys.modules["funtofem"] = _funtofem_stub
-
-_strategy_mod = _load_sweep_module("strategy")
-_mesh_mode_mod = _load_sweep_module("mesh_mode")
-
-if "funtofem.sweep" not in sys.modules:
-    _sweep_pkg = types.ModuleType("funtofem.sweep")
-    sys.modules["funtofem.sweep"] = _sweep_pkg
-
-sys.modules["funtofem.sweep"].SweepStrategy = _strategy_mod.SweepStrategy
-sys.modules["funtofem.sweep"].CartesianStrategy = _strategy_mod.CartesianStrategy
-sys.modules["funtofem.sweep"].MeshMode = _mesh_mode_mod.MeshMode
-
-_param_sweep_mod = _load_sweep_module("parameter_sweep")
-
-ParameterSweep = _param_sweep_mod.ParameterSweep
-MeshMode = _mesh_mode_mod.MeshMode
+ParameterSweep = _sweep.ParameterSweep
+MeshMode = _sweep.MeshMode
 
 
 # ---------------------------------------------------------------------------

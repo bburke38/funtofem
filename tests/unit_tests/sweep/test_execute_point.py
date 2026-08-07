@@ -16,57 +16,45 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
-# Import directly from the sweep subpackage to avoid pulling in native TACS/FUN3D
-# libraries through funtofem/__init__.py. The sweep submodule has no native deps.
+# Load the sweep subpackage under a private alias.
+#
+# These tests must not import the top-level funtofem package, which pulls in
+# the native TACS/FUN3D extensions. They also must not leave a stub named
+# "funtofem" in sys.modules: testflo imports every test module into a single
+# process, so a stub would shadow the real package for the tests that run
+# later. Loading the subpackage as "_f2f_sweep_test.sweep" keeps the sweep
+# modules' relative imports working while leaving "funtofem" untouched.
 # ---------------------------------------------------------------------------
 import importlib.util
 import pathlib
 
-_SWEEP_PKG = pathlib.Path(__file__).parents[3] / "funtofem" / "sweep"
+_SWEEP_DIR = pathlib.Path(__file__).parents[3] / "funtofem" / "sweep"
+SWEEP_ROOT_PKG = "_f2f_sweep_test"
+SWEEP_PKG = f"{SWEEP_ROOT_PKG}.sweep"
 
+if SWEEP_PKG not in sys.modules:
+    _root = types.ModuleType(SWEEP_ROOT_PKG)
+    # Empty __path__ so the lazy "from ..driver import FUNtoFEMnlbgs" inside
+    # parameter_sweep raises ImportError (which that call site handles) instead
+    # of reaching the real funtofem.driver and its native dependencies.
+    _root.__path__ = []
+    sys.modules[SWEEP_ROOT_PKG] = _root
 
-def _load_sweep_module(name: str):
-    spec = importlib.util.spec_from_file_location(
-        f"funtofem.sweep.{name}",
-        str(_SWEEP_PKG / f"{name}.py"),
+    _spec = importlib.util.spec_from_file_location(
+        SWEEP_PKG,
+        str(_SWEEP_DIR / "__init__.py"),
+        submodule_search_locations=[str(_SWEEP_DIR)],
     )
-    # No submodule_search_locations: these are plain modules, not packages.
-    # module_from_spec then derives __package__ = "funtofem.sweep" from
-    # spec.parent, which is what the modules' relative imports need. Setting
-    # __package__ by hand while the spec says "package" makes them disagree
-    # and Python emits ImportWarning: __package__ != __spec__.parent.
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[f"funtofem.sweep.{name}"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    _pkg = importlib.util.module_from_spec(_spec)
+    sys.modules[SWEEP_PKG] = _pkg
+    _root.sweep = _pkg
+    _spec.loader.exec_module(_pkg)
 
+_sweep = sys.modules[SWEEP_PKG]
 
-# Ensure funtofem package stub exists so relative imports from parameter_sweep work
-if "funtofem" not in sys.modules:
-    _funtofem_stub = types.ModuleType("funtofem")
-    _funtofem_stub.__path__ = [str(pathlib.Path(__file__).parents[3] / "funtofem")]
-    _funtofem_stub.__package__ = "funtofem"
-    sys.modules["funtofem"] = _funtofem_stub
-
-# Load modules in dependency order
-_strategy_mod = _load_sweep_module("strategy")
-_mesh_mode_mod = _load_sweep_module("mesh_mode")
-
-# parameter_sweep imports from .strategy and .mesh_mode using relative imports;
-# register them so the relative imports resolve correctly.
-if "funtofem.sweep" not in sys.modules:
-    _sweep_pkg = types.ModuleType("funtofem.sweep")
-    sys.modules["funtofem.sweep"] = _sweep_pkg
-
-sys.modules["funtofem.sweep"].SweepStrategy = _strategy_mod.SweepStrategy
-sys.modules["funtofem.sweep"].CartesianStrategy = _strategy_mod.CartesianStrategy
-sys.modules["funtofem.sweep"].MeshMode = _mesh_mode_mod.MeshMode
-
-_param_sweep_mod = _load_sweep_module("parameter_sweep")
-
-ParameterSweep = _param_sweep_mod.ParameterSweep
-_default_result_extractor = _param_sweep_mod._default_result_extractor
-MeshMode = _mesh_mode_mod.MeshMode
+ParameterSweep = _sweep.ParameterSweep
+_default_result_extractor = _sweep.parameter_sweep._default_result_extractor
+MeshMode = _sweep.MeshMode
 
 
 # ---------------------------------------------------------------------------
@@ -274,15 +262,15 @@ def _mock_nlbgs_import(mock_nlbgs_cls):
     """Context manager that makes the lazy import inside _execute_point return mock_nlbgs_cls.
 
     The implementation does ``from ..driver import FUNtoFEMnlbgs`` inside a
-    try/except block.  We patch ``funtofem.sweep.parameter_sweep``'s import
-    machinery by temporarily placing the mock into sys.modules.
+    try/except block. Under the alias package that resolves to
+    "<SWEEP_ROOT_PKG>.driver", so placing the mock there in sys.modules makes
+    the lazy import hand back mock_nlbgs_cls.
     """
-    fake_driver_mod = types.ModuleType("funtofem.driver")
+    driver_modname = f"{SWEEP_ROOT_PKG}.driver"
+    fake_driver_mod = types.ModuleType(driver_modname)
     fake_driver_mod.FUNtoFEMnlbgs = mock_nlbgs_cls
 
-    # Also need funtofem.sweep to have __package__ set correctly for the
-    # relative import to resolve. Ensure funtofem.driver is reachable.
-    return patch.dict(sys.modules, {"funtofem.driver": fake_driver_mod})
+    return patch.dict(sys.modules, {driver_modname: fake_driver_mod})
 
 
 class TestExecutePointDefaultDriver(unittest.TestCase):

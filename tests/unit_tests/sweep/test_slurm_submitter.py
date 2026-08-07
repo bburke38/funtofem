@@ -4,64 +4,57 @@ skip_completed logic, and extra_directives injection.
 """
 
 import csv
+import io
 import json
 import os
 import sys
+import tempfile
 import types
-
-import pytest
+import unittest
+from contextlib import redirect_stdout
 
 # ---------------------------------------------------------------------------
-# Import directly from the sweep subpackage to avoid pulling in native TACS/FUN3D
+# Load the sweep subpackage under a private alias.
+#
+# These tests must not import the top-level funtofem package, which pulls in
+# the native TACS/FUN3D extensions. They also must not leave a stub named
+# "funtofem" in sys.modules: testflo imports every test module into a single
+# process, so a stub would shadow the real package for the tests that run
+# later. Loading the subpackage as "_f2f_sweep_test.sweep" keeps the sweep
+# modules' relative imports working while leaving "funtofem" untouched.
 # ---------------------------------------------------------------------------
 import importlib.util
 import pathlib
 
-_SWEEP_PKG = pathlib.Path(__file__).parents[3] / "funtofem" / "sweep"
+_SWEEP_DIR = pathlib.Path(__file__).parents[3] / "funtofem" / "sweep"
+SWEEP_ROOT_PKG = "_f2f_sweep_test"
+SWEEP_PKG = f"{SWEEP_ROOT_PKG}.sweep"
 
+if SWEEP_PKG not in sys.modules:
+    _root = types.ModuleType(SWEEP_ROOT_PKG)
+    # Empty __path__ so the lazy "from ..driver import FUNtoFEMnlbgs" inside
+    # parameter_sweep raises ImportError (which that call site handles) instead
+    # of reaching the real funtofem.driver and its native dependencies.
+    _root.__path__ = []
+    sys.modules[SWEEP_ROOT_PKG] = _root
 
-def _load_sweep_module(name: str):
-    spec = importlib.util.spec_from_file_location(
-        f"funtofem.sweep.{name}",
-        str(_SWEEP_PKG / f"{name}.py"),
+    _spec = importlib.util.spec_from_file_location(
+        SWEEP_PKG,
+        str(_SWEEP_DIR / "__init__.py"),
+        submodule_search_locations=[str(_SWEEP_DIR)],
     )
-    # No submodule_search_locations: these are plain modules, not packages.
-    # module_from_spec then derives __package__ = "funtofem.sweep" from
-    # spec.parent, which is what the modules' relative imports need. Setting
-    # __package__ by hand while the spec says "package" makes them disagree
-    # and Python emits ImportWarning: __package__ != __spec__.parent.
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[f"funtofem.sweep.{name}"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    _pkg = importlib.util.module_from_spec(_spec)
+    sys.modules[SWEEP_PKG] = _pkg
+    _root.sweep = _pkg
+    _spec.loader.exec_module(_pkg)
 
+_sweep = sys.modules[SWEEP_PKG]
 
-# Ensure funtofem package stub exists
-if "funtofem" not in sys.modules:
-    _funtofem_stub = types.ModuleType("funtofem")
-    _funtofem_stub.__path__ = [str(pathlib.Path(__file__).parents[3] / "funtofem")]
-    _funtofem_stub.__package__ = "funtofem"
-    sys.modules["funtofem"] = _funtofem_stub
-
-_strategy_mod = _load_sweep_module("strategy")
-_mesh_mode_mod = _load_sweep_module("mesh_mode")
-
-if "funtofem.sweep" not in sys.modules:
-    _sweep_pkg = types.ModuleType("funtofem.sweep")
-    sys.modules["funtofem.sweep"] = _sweep_pkg
-
-sys.modules["funtofem.sweep"].SweepStrategy = _strategy_mod.SweepStrategy
-sys.modules["funtofem.sweep"].CartesianStrategy = _strategy_mod.CartesianStrategy
-sys.modules["funtofem.sweep"].MeshMode = _mesh_mode_mod.MeshMode
-
-_param_sweep_mod = _load_sweep_module("parameter_sweep")
-_slurm_mod = _load_sweep_module("slurm_submitter")
-
-CartesianStrategy = _strategy_mod.CartesianStrategy
-MeshMode = _mesh_mode_mod.MeshMode
-ParameterSweep = _param_sweep_mod.ParameterSweep
-SlurmSweepSubmitter = _slurm_mod.SlurmSweepSubmitter
-_make_key = _param_sweep_mod._make_key
+CartesianStrategy = _sweep.CartesianStrategy
+MeshMode = _sweep.MeshMode
+ParameterSweep = _sweep.ParameterSweep
+SlurmSweepSubmitter = _sweep.SlurmSweepSubmitter
+_make_key = _sweep.parameter_sweep._make_key
 
 
 # ---------------------------------------------------------------------------
@@ -106,48 +99,64 @@ def _make_submitter(sweep, extra_directives=None, preamble="", log_dir="sweep_lo
     )
 
 
+class _SubmitterTestCase(unittest.TestCase):
+    """Base class giving each test its own scratch directory as self.tmp_path."""
+
+    def setUp(self):
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        self.tmp_path = pathlib.Path(tmpdir.name)
+
+    def _submit_dry_run(self, submitter, **kwargs):
+        """Run submit(dry_run=True) with stdout captured; return the output."""
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            submitter.submit(dry_run=True, **kwargs)
+        return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # Test: _build_job_script produces expected content
 # ---------------------------------------------------------------------------
 
 
-class TestBuildJobScript:
-    def test_slurm_headers_present(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+class TestBuildJobScript(_SubmitterTestCase):
+    def test_slurm_headers_present(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
         key = "pt_abc123def456"
         point_json = f"{sweep.cfd_root}/{key}/point.json"
         script = submitter._build_job_script(key, point_json)
 
-        assert "#!/bin/bash" in script
-        assert "#SBATCH -A TEST_ACCOUNT" in script
-        assert f"#SBATCH --job-name={key}" in script
-        assert "#SBATCH -p test_partition" in script
-        assert "#SBATCH -q test_qos" in script
-        assert "#SBATCH --nodes=2" in script
-        assert "#SBATCH --ntasks-per-node=64" in script
-        assert "#SBATCH --time=04:00:00" in script
+        self.assertIn("#!/bin/bash", script)
+        self.assertIn("#SBATCH -A TEST_ACCOUNT", script)
+        self.assertIn(f"#SBATCH --job-name={key}", script)
+        self.assertIn("#SBATCH -p test_partition", script)
+        self.assertIn("#SBATCH -q test_qos", script)
+        self.assertIn("#SBATCH --nodes=2", script)
+        self.assertIn("#SBATCH --ntasks-per-node=64", script)
+        self.assertIn("#SBATCH --time=04:00:00", script)
 
-    def test_log_paths_use_key(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_log_paths_use_key(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep, log_dir="my_logs")
         key = "pt_testkey000001"
         script = submitter._build_job_script(key, "some/path/point.json")
 
-        assert f"#SBATCH --output=my_logs/{key}.out" in script
-        assert f"#SBATCH --error=my_logs/{key}.err" in script
+        self.assertIn(f"#SBATCH --output=my_logs/{key}.out", script)
+        self.assertIn(f"#SBATCH --error=my_logs/{key}.err", script)
 
-    def test_srun_command_with_point_file(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_srun_command_with_point_file(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
         key = "pt_abc123def456"
         point_json_path = f"{sweep.cfd_root}/{key}/point.json"
         script = submitter._build_job_script(key, point_json_path)
 
-        assert f"srun python my_sweep.py --point-file {point_json_path}" in script
+        self.assertIn(f"srun python my_sweep.py --point-file {point_json_path}", script)
 
-    def test_preamble_inserted_before_srun(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_preamble_inserted_before_srun(self):
+        sweep = _make_sweep(self.tmp_path)
         preamble = "source $HOME/.bashrc\nmodule load python"
         submitter = _make_submitter(sweep, preamble=preamble)
         key = "pt_abc123def456"
@@ -155,22 +164,22 @@ class TestBuildJobScript:
 
         preamble_pos = script.find(preamble)
         srun_pos = script.find("srun python")
-        assert preamble_pos != -1, "Preamble not found in script"
-        assert srun_pos != -1, "srun line not found in script"
-        assert preamble_pos < srun_pos, "Preamble must appear before srun"
+        self.assertNotEqual(preamble_pos, -1, "Preamble not found in script")
+        self.assertNotEqual(srun_pos, -1, "srun line not found in script")
+        self.assertLess(preamble_pos, srun_pos, "Preamble must appear before srun")
 
-    def test_extra_directives_injected(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_extra_directives_injected(self):
+        sweep = _make_sweep(self.tmp_path)
         extra = ["--mail-type=END", "--mail-user=me@example.com"]
         submitter = _make_submitter(sweep, extra_directives=extra)
         key = "pt_abc123def456"
         script = submitter._build_job_script(key, "some/point.json")
 
-        assert "#SBATCH --mail-type=END" in script
-        assert "#SBATCH --mail-user=me@example.com" in script
+        self.assertIn("#SBATCH --mail-type=END", script)
+        self.assertIn("#SBATCH --mail-user=me@example.com", script)
 
-    def test_no_extra_directives_by_default(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_no_extra_directives_by_default(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
         key = "pt_abc123def456"
         script = submitter._build_job_script(key, "some/point.json")
@@ -191,9 +200,10 @@ class TestBuildJobScript:
             line for line in script.splitlines() if line.startswith("#SBATCH")
         ]
         for line in sbatch_lines:
-            assert any(
-                line.startswith(d) for d in standard_prefixes
-            ), f"Unexpected #SBATCH directive: {line}"
+            self.assertTrue(
+                any(line.startswith(d) for d in standard_prefixes),
+                f"Unexpected #SBATCH directive: {line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -201,41 +211,40 @@ class TestBuildJobScript:
 # ---------------------------------------------------------------------------
 
 
-class TestDryRun:
-    def test_dry_run_prints_script(self, tmp_path, capsys):
-        sweep = _make_sweep(tmp_path)
+class TestDryRun(_SubmitterTestCase):
+    def test_dry_run_prints_script(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        out = self._submit_dry_run(submitter)
 
-        captured = capsys.readouterr()
-        assert "srun python my_sweep.py --point-file" in captured.out
-        assert "#!/bin/bash" in captured.out
-        assert "DRY RUN" in captured.out
+        self.assertIn("srun python my_sweep.py --point-file", out)
+        self.assertIn("#!/bin/bash", out)
+        self.assertIn("DRY RUN", out)
 
-    def test_dry_run_writes_point_json(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_dry_run_writes_point_json(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
         # Verify point.json files were created for all design points
         for alpha in [1.0, 2.0]:
             point = {"alpha": alpha, "beta": 10.0}
             key = _make_key(point)
-            point_json = tmp_path / "cfd" / key / "point.json"
-            assert point_json.exists(), f"Expected {point_json} to exist"
+            point_json = self.tmp_path / "cfd" / key / "point.json"
+            self.assertTrue(point_json.exists(), f"Expected {point_json} to exist")
             loaded = json.loads(point_json.read_text())
-            assert loaded["alpha"] == alpha
-            assert loaded["beta"] == 10.0
+            self.assertEqual(loaded["alpha"], alpha)
+            self.assertEqual(loaded["beta"], 10.0)
 
-    def test_dry_run_creates_summary_file(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_dry_run_creates_summary_file(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
-        summary_path = tmp_path / "submission_summary.txt"
-        assert summary_path.exists()
-        content = summary_path.read_text()
-        assert "dry_run" in content
+        summary_path = self.tmp_path / "submission_summary.txt"
+        self.assertTrue(summary_path.exists())
+        # The summary must record that nothing was actually submitted.
+        self.assertIn("DRY RUN", summary_path.read_text())
 
 
 # ---------------------------------------------------------------------------
@@ -243,45 +252,44 @@ class TestDryRun:
 # ---------------------------------------------------------------------------
 
 
-class TestPointJsonCreation:
-    def test_point_json_correct_content(self, tmp_path):
-        sweep = _make_sweep(tmp_path, params={"x": [0.5], "y": [1.5]})
+class TestPointJsonCreation(_SubmitterTestCase):
+    def test_point_json_correct_content(self):
+        sweep = _make_sweep(self.tmp_path, params={"x": [0.5], "y": [1.5]})
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
         point = {"x": 0.5, "y": 1.5}
         key = _make_key(point)
-        point_json_path = tmp_path / "cfd" / key / "point.json"
-        assert point_json_path.exists()
-        loaded = json.loads(point_json_path.read_text())
-        assert loaded == point
+        point_json_path = self.tmp_path / "cfd" / key / "point.json"
+        self.assertTrue(point_json_path.exists())
+        self.assertEqual(json.loads(point_json_path.read_text()), point)
 
-    def test_point_json_directory_created(self, tmp_path):
-        sweep = _make_sweep(tmp_path, params={"z": [3.14]})
+    def test_point_json_directory_created(self):
+        sweep = _make_sweep(self.tmp_path, params={"z": [3.14]})
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
         key = _make_key({"z": 3.14})
-        point_dir = tmp_path / "cfd" / key
-        assert point_dir.is_dir()
+        point_dir = self.tmp_path / "cfd" / key
+        self.assertTrue(point_dir.is_dir())
 
-    def test_point_json_path_in_script(self, tmp_path):
-        sweep = _make_sweep(tmp_path, params={"v": [7]})
+    def test_point_json_path_in_script(self):
+        sweep = _make_sweep(self.tmp_path, params={"v": [7]})
         submitter = _make_submitter(sweep)
 
         key = _make_key({"v": 7})
         expected_path = os.path.join(sweep.cfd_root, key, "point.json")
         script = submitter._build_job_script(key, expected_path)
-        assert f"--point-file {expected_path}" in script
+        self.assertIn(f"--point-file {expected_path}", script)
 
-    def test_multiple_points_each_get_point_json(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_multiple_points_each_get_point_json(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
         for alpha in [1.0, 2.0]:
             key = _make_key({"alpha": alpha, "beta": 10.0})
-            assert (tmp_path / "cfd" / key / "point.json").exists()
+            self.assertTrue((self.tmp_path / "cfd" / key / "point.json").exists())
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +297,7 @@ class TestPointJsonCreation:
 # ---------------------------------------------------------------------------
 
 
-class TestSkipCompleted:
+class TestSkipCompleted(_SubmitterTestCase):
     def _write_csv_with_status(self, csv_path, rows):
         fieldnames = ["key", "status", "alpha", "beta"]
         with open(csv_path, "w", newline="") as f:
@@ -298,8 +306,8 @@ class TestSkipCompleted:
             for row in rows:
                 writer.writerow(row)
 
-    def test_skip_completed_skips_success_rows(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_skip_completed_skips_success_rows(self):
+        sweep = _make_sweep(self.tmp_path)
         completed_point = {"alpha": 1.0, "beta": 10.0}
         completed_key = _make_key(completed_point)
         self._write_csv_with_status(
@@ -308,21 +316,21 @@ class TestSkipCompleted:
         )
 
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True, skip_completed=True)
+        self._submit_dry_run(submitter, skip_completed=True)
 
-        summary_path = tmp_path / "submission_summary.txt"
+        summary_path = self.tmp_path / "submission_summary.txt"
         content = summary_path.read_text()
         # The completed key should appear as skipped
-        assert completed_key in content
-        assert "SKIP" in content
+        self.assertIn(completed_key, content)
+        self.assertIn("SKIP", content)
 
         # The other point (alpha=2.0) should be a dry run
         other_key = _make_key({"alpha": 2.0, "beta": 10.0})
-        assert other_key in content
-        assert "DRY RUN" in content
+        self.assertIn(other_key, content)
+        self.assertIn("DRY RUN", content)
 
-    def test_skip_completed_failed_rows_are_rerun(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_skip_completed_failed_rows_are_rerun(self):
+        sweep = _make_sweep(self.tmp_path)
         failed_point = {"alpha": 1.0, "beta": 10.0}
         failed_key = _make_key(failed_point)
         self._write_csv_with_status(
@@ -331,32 +339,32 @@ class TestSkipCompleted:
         )
 
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True, skip_completed=True)
+        self._submit_dry_run(submitter, skip_completed=True)
 
-        summary_path = tmp_path / "submission_summary.txt"
+        summary_path = self.tmp_path / "submission_summary.txt"
         content = summary_path.read_text()
         # Failed points should be submitted (DRY RUN), not skipped
-        assert failed_key in content
-        assert "DRY RUN" in content
+        self.assertIn(failed_key, content)
+        self.assertIn("DRY RUN", content)
         # Should not appear as skipped
         skip_lines = [
             l for l in content.splitlines() if "SKIP" in l and failed_key in l
         ]
-        assert not skip_lines, "Failed point should not be skipped"
+        self.assertFalse(skip_lines, "Failed point should not be skipped")
 
-    def test_skip_completed_no_csv_processes_all(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_skip_completed_no_csv_processes_all(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
         # No CSV exists — all points should be processed
-        submitter.submit(dry_run=True, skip_completed=True)
+        self._submit_dry_run(submitter, skip_completed=True)
 
-        summary_path = tmp_path / "submission_summary.txt"
+        summary_path = self.tmp_path / "submission_summary.txt"
         content = summary_path.read_text()
         # Both design points should appear as DRY RUN
-        assert content.count("DRY RUN") >= 2
+        self.assertGreaterEqual(content.count("DRY RUN"), 2)
 
-    def test_skip_completed_false_does_not_skip_success(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_skip_completed_false_does_not_skip_success(self):
+        sweep = _make_sweep(self.tmp_path)
         completed_point = {"alpha": 1.0, "beta": 10.0}
         completed_key = _make_key(completed_point)
         self._write_csv_with_status(
@@ -366,12 +374,12 @@ class TestSkipCompleted:
 
         submitter = _make_submitter(sweep)
         # skip_completed=False (default) — all points should be submitted
-        submitter.submit(dry_run=True, skip_completed=False)
+        self._submit_dry_run(submitter, skip_completed=False)
 
-        summary_path = tmp_path / "submission_summary.txt"
+        summary_path = self.tmp_path / "submission_summary.txt"
         content = summary_path.read_text()
         # Both points should appear as DRY RUN (no skipping)
-        assert content.count("DRY RUN") >= 2
+        self.assertGreaterEqual(content.count("DRY RUN"), 2)
 
 
 # ---------------------------------------------------------------------------
@@ -379,16 +387,16 @@ class TestSkipCompleted:
 # ---------------------------------------------------------------------------
 
 
-class TestExtraDirectives:
-    def test_single_extra_directive(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+class TestExtraDirectives(_SubmitterTestCase):
+    def test_single_extra_directive(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep, extra_directives=["--mail-type=END"])
         key = "pt_testkey"
         script = submitter._build_job_script(key, "some/path.json")
-        assert "#SBATCH --mail-type=END" in script
+        self.assertIn("#SBATCH --mail-type=END", script)
 
-    def test_multiple_extra_directives_all_present(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_multiple_extra_directives_all_present(self):
+        sweep = _make_sweep(self.tmp_path)
         directives = [
             "--mail-type=END",
             "--mail-user=user@example.com",
@@ -399,10 +407,10 @@ class TestExtraDirectives:
         script = submitter._build_job_script(key, "some/path.json")
 
         for directive in directives:
-            assert f"#SBATCH {directive}" in script
+            self.assertIn(f"#SBATCH {directive}", script)
 
-    def test_none_extra_directives_treated_as_empty(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_none_extra_directives_treated_as_empty(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = SlurmSweepSubmitter(
             sweep,
             {
@@ -416,11 +424,11 @@ class TestExtraDirectives:
             sweep_script="run.py",
             extra_directives=None,
         )
-        assert submitter.extra_directives == []
+        self.assertEqual(submitter.extra_directives, [])
 
-    def test_extra_directives_appear_before_srun(self, tmp_path):
+    def test_extra_directives_appear_before_srun(self):
         """Extra directives must appear before the srun line."""
-        sweep = _make_sweep(tmp_path)
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(
             sweep, preamble="echo start", extra_directives=["--gres=gpu:1"]
         )
@@ -430,8 +438,8 @@ class TestExtraDirectives:
         extra_pos = script.find("#SBATCH --gres=gpu:1")
         srun_pos = script.find("srun python")
 
-        assert extra_pos != -1, "Extra directive not found"
-        assert extra_pos < srun_pos, "Extra directive must appear before srun"
+        self.assertNotEqual(extra_pos, -1, "Extra directive not found")
+        self.assertLess(extra_pos, srun_pos, "Extra directive must appear before srun")
 
 
 # ---------------------------------------------------------------------------
@@ -439,37 +447,37 @@ class TestExtraDirectives:
 # ---------------------------------------------------------------------------
 
 
-class TestSubmissionSummary:
-    def test_summary_path_is_alongside_csv(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+class TestSubmissionSummary(_SubmitterTestCase):
+    def test_summary_path_is_alongside_csv(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
-        expected = tmp_path / "submission_summary.txt"
-        assert expected.exists()
+        expected = self.tmp_path / "submission_summary.txt"
+        self.assertTrue(expected.exists())
 
-    def test_summary_contains_all_keys(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_summary_contains_all_keys(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
         keys = [
             _make_key({"alpha": 1.0, "beta": 10.0}),
             _make_key({"alpha": 2.0, "beta": 10.0}),
         ]
-        content = (tmp_path / "submission_summary.txt").read_text()
+        content = (self.tmp_path / "submission_summary.txt").read_text()
         for key in keys:
-            assert key in content
+            self.assertIn(key, content)
 
-    def test_summary_has_header_line(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_summary_has_header_line(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = _make_submitter(sweep)
-        submitter.submit(dry_run=True)
+        self._submit_dry_run(submitter)
 
-        content = (tmp_path / "submission_summary.txt").read_text()
+        content = (self.tmp_path / "submission_summary.txt").read_text()
         # Summary should contain a timestamped banner and design point info
-        assert "Parameter sweep launcher" in content
-        assert "Total design points" in content
+        self.assertIn("Parameter sweep launcher", content)
+        self.assertIn("Total design points", content)
 
 
 # ---------------------------------------------------------------------------
@@ -477,9 +485,9 @@ class TestSubmissionSummary:
 # ---------------------------------------------------------------------------
 
 
-class TestConstructor:
-    def test_attributes_stored(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+class TestConstructor(_SubmitterTestCase):
+    def test_attributes_stored(self):
+        sweep = _make_sweep(self.tmp_path)
         slurm_config = {
             "account": "ACC",
             "partition": "part",
@@ -496,15 +504,15 @@ class TestConstructor:
             log_dir="my_logs",
             extra_directives=["--x=y"],
         )
-        assert submitter.sweep is sweep
-        assert submitter.slurm_config is slurm_config
-        assert submitter.sweep_script == "/path/to/script.py"
-        assert submitter.preamble == "echo hello"
-        assert submitter.log_dir == "my_logs"
-        assert submitter.extra_directives == ["--x=y"]
+        self.assertIs(submitter.sweep, sweep)
+        self.assertIs(submitter.slurm_config, slurm_config)
+        self.assertEqual(submitter.sweep_script, "/path/to/script.py")
+        self.assertEqual(submitter.preamble, "echo hello")
+        self.assertEqual(submitter.log_dir, "my_logs")
+        self.assertEqual(submitter.extra_directives, ["--x=y"])
 
-    def test_default_values(self, tmp_path):
-        sweep = _make_sweep(tmp_path)
+    def test_default_values(self):
+        sweep = _make_sweep(self.tmp_path)
         submitter = SlurmSweepSubmitter(
             sweep,
             {
@@ -517,6 +525,10 @@ class TestConstructor:
             },
             sweep_script="run.py",
         )
-        assert submitter.preamble == ""
-        assert submitter.log_dir == "sweep_logs"
-        assert submitter.extra_directives == []
+        self.assertEqual(submitter.preamble, "")
+        self.assertEqual(submitter.log_dir, "sweep_logs")
+        self.assertEqual(submitter.extra_directives, [])
+
+
+if __name__ == "__main__":
+    unittest.main()
